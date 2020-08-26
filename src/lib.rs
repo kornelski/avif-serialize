@@ -169,7 +169,7 @@ pub fn serialize_to_vec(color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, wi
 }
 
 #[test]
-fn test_roundtrip_parse() {
+fn test_roundtrip_parse_mp4() {
     let test_img = b"av12356abc";
     let avif = serialize_to_vec(test_img, None, 10, 20, 8);
 
@@ -177,4 +177,16 @@ fn test_roundtrip_parse() {
     mp4parse::read_avif(&mut avif.as_slice(), &mut ctx).unwrap();
 
     assert_eq!(&test_img[..], ctx.primary_item.as_slice());
+}
+
+#[test]
+fn test_roundtrip_parse_avif() {
+    let test_img = b"av12356abc";
+    let test_alpha = b"a1phadata";
+    let avif = serialize_to_vec(test_img, Some(test_alpha), 10, 20, 8);
+
+    let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+
+    assert_eq!(&test_img[..], ctx.primary_item.as_slice());
+    assert_eq!(&test_alpha[..], ctx.alpha_item.as_deref().unwrap());
 }
