@@ -1,5 +1,5 @@
-use std::convert::TryFrom;
 use std::convert::Infallible;
+use std::convert::TryFrom;
 use std::io;
 
 pub trait WriterBackend {
@@ -61,7 +61,7 @@ impl<'p, 'w, B: WriterBackend> Writer<'p, 'w, B> {
     #[inline(always)]
     pub fn full_box(&mut self, typ: [u8; 4], version: u8) -> Result<(), B::Error> {
         self.basic_box(typ)?;
-        self.push(&[version, 0,0,0])
+        self.push(&[version, 0, 0, 0])
     }
 
     #[inline]

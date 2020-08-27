@@ -1,10 +1,10 @@
-use arrayvec::ArrayVec;
-use crate::writer::IO;
 use crate::writer::Writer;
 use crate::writer::WriterBackend;
+use crate::writer::IO;
+use arrayvec::ArrayVec;
 use std::fmt;
-use std::io::Write;
 use std::io;
+use std::io::Write;
 
 pub trait MpegBox {
     fn len(&self) -> usize;
@@ -18,7 +18,7 @@ impl fmt::Debug for FourCC {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match std::str::from_utf8(&self.0) {
             Ok(s) => s.fmt(f),
-            Err(_) => self.0.fmt(f)
+            Err(_) => self.0.fmt(f),
         }
     }
 }
@@ -118,11 +118,11 @@ impl MpegBox for MetaBox {
     #[inline]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
-        + self.pitm.len()
-        + self.iloc.len()
-        + self.iinf.len()
-        + self.iprp.len()
-        + self.iref.as_ref().map_or(0, |b| b.len())
+            + self.pitm.len()
+            + self.iloc.len()
+            + self.iinf.len()
+            + self.iprp.len()
+            + self.iref.as_ref().map_or(0, |b| b.len())
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -227,9 +227,9 @@ impl MpegBox for IpcoBox {
     #[inline]
     fn len(&self) -> usize {
         BASIC_BOX_SIZE
-        + self.ispe.len()
-        + self.av1c.iter().map(|a| a.len()).sum::<usize>()
-        + self.auxc.map_or(0, |a| a.len())
+            + self.ispe.len()
+            + self.av1c.iter().map(|a| a.len()).sum::<usize>()
+            + self.auxc.map_or(0, |a| a.len())
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -253,8 +253,7 @@ pub struct AuxCBox {
 
 impl AuxCBox {
     pub fn len(&self) -> usize {
-        FULL_BOX_SIZE
-            + self.urn.len() + 1
+        FULL_BOX_SIZE + self.urn.len() + 1
     }
 
     pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -388,12 +387,9 @@ impl MpegBox for IrefBox {
     }
 }
 
-
-
 /// Auxiliary item (alpha or depth map)
 #[derive(Debug, Copy, Clone)]
-pub struct AuxlBox {
-}
+pub struct AuxlBox {}
 
 impl MpegBox for AuxlBox {
     #[inline(always)]
@@ -529,7 +525,7 @@ impl MpegBox for IlocBox {
 
 #[derive(Debug, Copy, Clone)]
 pub struct MdatBox<'data> {
-    pub data_chunks: &'data[&'data [u8]],
+    pub data_chunks: &'data [&'data [u8]],
 }
 
 impl MpegBox for MdatBox<'_> {
@@ -547,4 +543,3 @@ impl MpegBox for MdatBox<'_> {
         Ok(())
     }
 }
-

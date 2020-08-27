@@ -1,5 +1,5 @@
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 fn main() {
     let path = std::env::args_os().nth(1).expect("Please specify path to an AVIF file to optimize");

@@ -134,20 +134,13 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
             compatible_brands,
         },
         meta: MetaBox {
-            iinf: IinfBox {
-                items: image_items,
-            },
+            iinf: IinfBox { items: image_items },
             pitm: PitmBox(color_image_id),
-            iloc: IlocBox {
-                items: iloc_items,
-            },
+            iloc: IlocBox { items: iloc_items },
             iprp: IprpBox {
                 ipco: IpcoBox {
                     // This is redundant data inherited from the HEIF spec.
-                    ispe: IspeBox {
-                        width,
-                        height,
-                    },
+                    ispe: IspeBox { width, height },
                     av1c: av1c_items,
                     auxc,
                 },
@@ -163,7 +156,7 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
         // would have been the only data this file needs.
         mdat: MdatBox {
             data_chunks: &data_chunks,
-        }
+        },
     };
 
     boxes.write(into_output)
