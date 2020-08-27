@@ -91,50 +91,38 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
 
         // Use interleaved color and alpha, with alpha first.
         // Makes it possible to display partial image.
-        let (c1, c2) = color_av1_data.split_at(color_av1_data.len() / 2);
-        let (a1, a2) = alpha_data.split_at(alpha_data.len() / 2);
         iloc_items.push(IlocItem {
             id: color_image_id,
             extents: [
                 IlocExtent {
-                    offset: IlocOffset::Relative(a1.len()),
-                    len: c1.len(),
+                    offset: IlocOffset::Relative(alpha_data.len()),
+                    len: color_av1_data.len(),
                 },
-                IlocExtent {
-                    offset: IlocOffset::Relative(a1.len() + c1.len() + a2.len()),
-                    len: c2.len(),
-                }
-            ].into()
+            ].into(),
         });
         iloc_items.push(IlocItem {
             id: alpha_image_id,
             extents: [
                 IlocExtent {
                     offset: IlocOffset::Relative(0),
-                    len: a1.len(),
+                    len: alpha_data.len(),
                 },
-                IlocExtent {
-                    offset: IlocOffset::Relative(a1.len() + c1.len()),
-                    len: a2.len(),
-                }
-            ].into()
+            ].into(),
         });
-        data_chunks.push(a1);
-        data_chunks.push(c1);
-        data_chunks.push(a2);
-        data_chunks.push(c2);
+        data_chunks.push(alpha_data);
+        data_chunks.push(color_av1_data);
     } else {
         // that's a quirk only for opaque images in Firefox
         compatible_brands.push(FourCC(*b"mif1"));
 
-        let mut extents = ArrayVec::new();
-        extents.push(IlocExtent {
-            offset: IlocOffset::Relative(0),
-            len: color_av1_data.len(),
-        });
         iloc_items.push(IlocItem {
             id: color_image_id,
-            extents,
+            extents: [
+                IlocExtent {
+                    offset: IlocOffset::Relative(0),
+                    len: color_av1_data.len(),
+                },
+            ].into(),
         });
         data_chunks.push(color_av1_data);
     }
