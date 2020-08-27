@@ -24,9 +24,9 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
     let mut image_items = ArrayVec::new();
     let mut iloc_items = ArrayVec::new();
     let mut av1c_items = ArrayVec::new();
-    let mut mdats = ArrayVec::new();
     let mut compatible_brands = ArrayVec::new();
     let mut ipma_entries = ArrayVec::new();
+    let mut data_chunks = ArrayVec::<[&[u8]; 4]>::new();
     let mut iref = None;
     let mut auxc = None;
     let color_image_id = 1;
@@ -62,11 +62,6 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
             typ: FourCC(*b"av01"),
             name: "",
         });
-        iloc_items.push(IlocItem {
-            id: alpha_image_id,
-            data_offset: None,
-            data_len: alpha_data.len() as u32,
-        });
         av1c_items.push(Av1CBox {
             seq_profile: false,
             seq_level_idx_0: 0,
@@ -93,27 +88,56 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
             item_id: alpha_image_id,
             prop_ids: [3, 4].iter().copied().collect(),
         });
-        // Alpha goes first in the file - that's important.
-        // It gets separate mdat instead of sharing one with color, because
-        // that's slightly more convenient to encode and decode.
-        mdats.push(MdatBox {
-            data: alpha_data,
+
+        // Use interleaved color and alpha, with alpha first.
+        // Makes it possible to display partial image.
+        let (c1, c2) = color_av1_data.split_at(color_av1_data.len() / 2);
+        let (a1, a2) = alpha_data.split_at(alpha_data.len() / 2);
+        iloc_items.push(IlocItem {
+            id: color_image_id,
+            extents: [
+                IlocExtent {
+                    offset: IlocOffset::Relative(a1.len()),
+                    len: c1.len(),
+                },
+                IlocExtent {
+                    offset: IlocOffset::Relative(a1.len() + c1.len() + a2.len()),
+                    len: c2.len(),
+                }
+            ].into()
         });
+        iloc_items.push(IlocItem {
+            id: alpha_image_id,
+            extents: [
+                IlocExtent {
+                    offset: IlocOffset::Relative(0),
+                    len: a1.len(),
+                },
+                IlocExtent {
+                    offset: IlocOffset::Relative(a1.len() + c1.len()),
+                    len: a2.len(),
+                }
+            ].into()
+        });
+        data_chunks.push(a1);
+        data_chunks.push(c1);
+        data_chunks.push(a2);
+        data_chunks.push(c2);
     } else {
         // that's a quirk only for opaque images in Firefox
         compatible_brands.push(FourCC(*b"mif1"));
-    }
 
-    // Color is intentionally after alpha to help with
-    // correctly-looking progressive display.
-    mdats.push(MdatBox {
-        data: color_av1_data,
-    });
-    iloc_items.push(IlocItem {
-        id: color_image_id,
-        data_offset: None,
-        data_len: color_av1_data.len() as u32,
-    });
+        let mut extents = ArrayVec::new();
+        extents.push(IlocExtent {
+            offset: IlocOffset::Relative(0),
+            len: color_av1_data.len(),
+        });
+        iloc_items.push(IlocItem {
+            id: color_image_id,
+            extents,
+        });
+        data_chunks.push(color_av1_data);
+    }
 
     let mut boxes = AvifFile {
         ftyp: FtypBox {
@@ -149,14 +173,10 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
         },
         // Here's the actual data. If HEIF wasn't such a kitchen sink, this
         // would have been the only data this file needs.
-        mdat: mdats,
+        mdat: MdatBox {
+            data_chunks: &data_chunks,
+        }
     };
-
-    // `iloc` is mostly unnecssary, high risk of out-of-buffer accesses in parsers that don't pay attention,
-    // and also awkward to serialize, because its content depends on its own serialized byte size.
-    for n in 0..boxes.meta.iloc.items.len() {
-        boxes.meta.iloc.items[n].data_offset = Some(boxes.mdat_payload_start_offset(n));
-    }
 
     boxes.write(into_output)
 }
@@ -181,9 +201,9 @@ fn test_roundtrip_parse_mp4() {
 
 #[test]
 fn test_roundtrip_parse_avif() {
-    let test_img = b"av12356abc";
-    let test_alpha = b"a1phadata";
-    let avif = serialize_to_vec(test_img, Some(test_alpha), 10, 20, 8);
+    let test_img = [1,2,3,4,5,6];
+    let test_alpha = [77,88,99];
+    let avif = serialize_to_vec(&test_img, Some(&test_alpha), 10, 20, 8);
 
     let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
 
