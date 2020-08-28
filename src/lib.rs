@@ -31,7 +31,6 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
     Aviffy::new().write(into_output, color_av1_data, alpha_av1_data, width, height, depth_bits)
 }
 
-
 impl Aviffy {
     pub fn new() -> Self {
         Self {
@@ -67,154 +66,154 @@ impl Aviffy {
     ///
     /// Data is written (streamed) to `into_output`.
     pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
-    let mut image_items = ArrayVec::new();
-    let mut iloc_items = ArrayVec::new();
-    let mut av1c_items = ArrayVec::new();
-    let mut compatible_brands = ArrayVec::new();
-    let mut ipma_entries = ArrayVec::new();
-    let mut data_chunks = ArrayVec::<[&[u8]; 4]>::new();
-    let mut irefs = ArrayVec::new();
-    let mut auxc = None;
-    let color_image_id = 1;
-    let alpha_image_id = 2;
-    let high_bitdepth = depth_bits >= 10;
-    let twelve_bit = depth_bits >= 12;
+        let mut image_items = ArrayVec::new();
+        let mut iloc_items = ArrayVec::new();
+        let mut av1c_items = ArrayVec::new();
+        let mut compatible_brands = ArrayVec::new();
+        let mut ipma_entries = ArrayVec::new();
+        let mut data_chunks = ArrayVec::<[&[u8]; 4]>::new();
+        let mut irefs = ArrayVec::new();
+        let mut auxc = None;
+        let color_image_id = 1;
+        let alpha_image_id = 2;
+        let high_bitdepth = depth_bits >= 10;
+        let twelve_bit = depth_bits >= 12;
 
-    image_items.push(InfeBox {
-        id: color_image_id,
-        typ: FourCC(*b"av01"),
-        name: "",
-    });
-    // This is redundant, but Chrome wants it, and checks that it matches :(
-    av1c_items.push(Av1CBox {
-        seq_profile: false,
-        seq_level_idx_0: 0,
-        seq_tier_0: false,
-        high_bitdepth,
-        twelve_bit,
-        monochrome: false,
-        chroma_subsampling_x: false,
-        chroma_subsampling_y: false,
-        chroma_sample_position: 0,
-    });
-    ipma_entries.push(IpmaEntry {
-        item_id: color_image_id,
-        prop_ids: [1, 2].iter().copied().collect(),
-    });
-
-    if let Some(alpha_data) = alpha_av1_data {
         image_items.push(InfeBox {
-            id: alpha_image_id,
+            id: color_image_id,
             typ: FourCC(*b"av01"),
             name: "",
         });
+        // This is redundant, but Chrome wants it, and checks that it matches :(
         av1c_items.push(Av1CBox {
             seq_profile: false,
             seq_level_idx_0: 0,
             seq_tier_0: false,
             high_bitdepth,
             twelve_bit,
-            monochrome: true,
+            monochrome: false,
             chroma_subsampling_x: false,
             chroma_subsampling_y: false,
             chroma_sample_position: 0,
         });
-        // that's a silly way to add 1 bit of information, isn't it?
-        auxc = Some(AuxCBox {
-            urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
+        ipma_entries.push(IpmaEntry {
+            item_id: color_image_id,
+            prop_ids: [1, 2].iter().copied().collect(),
         });
-        irefs.push(IrefBox {
-            entry: IrefEntryBox {
-                from_id: alpha_image_id,
-                to_id: color_image_id,
-                typ: FourCC(*b"auxl"),
-            },
-        });
-        if self.premultiplied_alpha {
+
+        if let Some(alpha_data) = alpha_av1_data {
+            image_items.push(InfeBox {
+                id: alpha_image_id,
+                typ: FourCC(*b"av01"),
+                name: "",
+            });
+            av1c_items.push(Av1CBox {
+                seq_profile: false,
+                seq_level_idx_0: 0,
+                seq_tier_0: false,
+                high_bitdepth,
+                twelve_bit,
+                monochrome: true,
+                chroma_subsampling_x: false,
+                chroma_subsampling_y: false,
+                chroma_sample_position: 0,
+            });
+            // that's a silly way to add 1 bit of information, isn't it?
+            auxc = Some(AuxCBox {
+                urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
+            });
             irefs.push(IrefBox {
                 entry: IrefEntryBox {
-                    from_id: color_image_id,
-                    to_id: alpha_image_id,
-                    typ: FourCC(*b"prem"),
+                    from_id: alpha_image_id,
+                    to_id: color_image_id,
+                    typ: FourCC(*b"auxl"),
                 },
             });
+            if self.premultiplied_alpha {
+                irefs.push(IrefBox {
+                    entry: IrefEntryBox {
+                        from_id: color_image_id,
+                        to_id: alpha_image_id,
+                        typ: FourCC(*b"prem"),
+                    },
+                });
+            }
+            ipma_entries.push(IpmaEntry {
+                item_id: alpha_image_id,
+                prop_ids: [3, 4].iter().copied().collect(),
+            });
+
+            // Use interleaved color and alpha, with alpha first.
+            // Makes it possible to display partial image.
+            iloc_items.push(IlocItem {
+                id: color_image_id,
+                extents: [
+                    IlocExtent {
+                        offset: IlocOffset::Relative(alpha_data.len()),
+                        len: color_av1_data.len(),
+                    },
+                ].into(),
+            });
+            iloc_items.push(IlocItem {
+                id: alpha_image_id,
+                extents: [
+                    IlocExtent {
+                        offset: IlocOffset::Relative(0),
+                        len: alpha_data.len(),
+                    },
+                ].into(),
+            });
+            data_chunks.push(alpha_data);
+            data_chunks.push(color_av1_data);
+        } else {
+            // that's a quirk only for opaque images in Firefox
+            compatible_brands.push(FourCC(*b"mif1"));
+
+            iloc_items.push(IlocItem {
+                id: color_image_id,
+                extents: [
+                    IlocExtent {
+                        offset: IlocOffset::Relative(0),
+                        len: color_av1_data.len(),
+                    },
+                ].into(),
+            });
+            data_chunks.push(color_av1_data);
         }
-        ipma_entries.push(IpmaEntry {
-            item_id: alpha_image_id,
-            prop_ids: [3, 4].iter().copied().collect(),
-        });
 
-        // Use interleaved color and alpha, with alpha first.
-        // Makes it possible to display partial image.
-        iloc_items.push(IlocItem {
-            id: color_image_id,
-            extents: [
-                IlocExtent {
-                    offset: IlocOffset::Relative(alpha_data.len()),
-                    len: color_av1_data.len(),
-                },
-            ].into(),
-        });
-        iloc_items.push(IlocItem {
-            id: alpha_image_id,
-            extents: [
-                IlocExtent {
-                    offset: IlocOffset::Relative(0),
-                    len: alpha_data.len(),
-                },
-            ].into(),
-        });
-        data_chunks.push(alpha_data);
-        data_chunks.push(color_av1_data);
-    } else {
-        // that's a quirk only for opaque images in Firefox
-        compatible_brands.push(FourCC(*b"mif1"));
-
-        iloc_items.push(IlocItem {
-            id: color_image_id,
-            extents: [
-                IlocExtent {
-                    offset: IlocOffset::Relative(0),
-                    len: color_av1_data.len(),
-                },
-            ].into(),
-        });
-        data_chunks.push(color_av1_data);
-    }
-
-    let mut boxes = AvifFile {
-        ftyp: FtypBox {
-            major_brand: FourCC(*b"avif"),
-            minor_version: 0,
-            compatible_brands,
-        },
-        meta: MetaBox {
-            iinf: IinfBox { items: image_items },
-            pitm: PitmBox(color_image_id),
-            iloc: IlocBox { items: iloc_items },
-            iprp: IprpBox {
-                ipco: IpcoBox {
-                    // This is redundant data inherited from the HEIF spec.
-                    ispe: IspeBox { width, height },
-                    av1c: av1c_items,
-                    auxc,
-                },
-                // It's not enough to define these properties,
-                // they must be assigned to the image
-                ipma: IpmaBox {
-                    entries: ipma_entries,
-                },
+        let mut boxes = AvifFile {
+            ftyp: FtypBox {
+                major_brand: FourCC(*b"avif"),
+                minor_version: 0,
+                compatible_brands,
             },
-            iref: irefs,
-        },
-        // Here's the actual data. If HEIF wasn't such a kitchen sink, this
-        // would have been the only data this file needs.
-        mdat: MdatBox {
-            data_chunks: &data_chunks,
-        },
-    };
+            meta: MetaBox {
+                iinf: IinfBox { items: image_items },
+                pitm: PitmBox(color_image_id),
+                iloc: IlocBox { items: iloc_items },
+                iprp: IprpBox {
+                    ipco: IpcoBox {
+                        // This is redundant data inherited from the HEIF spec.
+                        ispe: IspeBox { width, height },
+                        av1c: av1c_items,
+                        auxc,
+                    },
+                    // It's not enough to define these properties,
+                    // they must be assigned to the image
+                    ipma: IpmaBox {
+                        entries: ipma_entries,
+                    },
+                },
+                iref: irefs,
+            },
+            // Here's the actual data. If HEIF wasn't such a kitchen sink, this
+            // would have been the only data this file needs.
+            mdat: MdatBox {
+                data_chunks: &data_chunks,
+            },
+        };
 
-    boxes.write(into_output)
+        boxes.write(into_output)
     }
 
     pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
