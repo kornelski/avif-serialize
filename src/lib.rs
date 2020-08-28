@@ -5,6 +5,13 @@ use crate::boxes::*;
 use arrayvec::ArrayVec;
 use std::io;
 
+/// Config for the serialization (allows setting advanced image properties).
+///
+/// See [`Aviffy::new`].
+pub struct Aviffy {
+    premultiplied_alpha: bool,
+}
+
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
 ///
 /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
@@ -21,6 +28,32 @@ use std::io;
 ///
 /// Data is written (streamed) to `into_output`.
 pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
+    Aviffy::new().write(into_output, color_av1_data, alpha_av1_data, width, height, depth_bits)
+}
+
+
+impl Aviffy {
+    pub fn new() -> Self {
+        Self {
+            premultiplied_alpha: false,
+        }
+    }
+    /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
+    ///
+    /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
+    /// The color image MUST have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
+    /// AV1 handles full-res color so effortlessly, you should never need chroma subsampling ever again.
+    ///
+    /// Optional `alpha_av1_data` is a monochrome image (`rav1e` calls it "YUV400"/`Cs400`) representing transparency.
+    /// Alpha adds a lot of header bloat, so don't specify it unless it's necessary.
+    ///
+    /// `width`/`height` is image size in pixels. It must of course match the size of encoded image data.
+    /// `depth_bits` should be 8, 10 or 12, depending on how the image was encoded (typically 8).
+    ///
+    /// Color and alpha must have the same dimensions and depth.
+    ///
+    /// Data is written (streamed) to `into_output`.
+    pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
     let mut image_items = ArrayVec::new();
     let mut iloc_items = ArrayVec::new();
     let mut av1c_items = ArrayVec::new();
@@ -160,13 +193,18 @@ pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_
     };
 
     boxes.write(into_output)
+    }
+
+    fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
+        let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 400);
+        self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap(); // Vec can't fail
+        out
+    }
 }
 
 /// See [`serialize`] for description. This one makes a `Vec` instead of using `io::Write`.
 pub fn serialize_to_vec(color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
-    let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 400);
-    serialize(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap(); // Vec can't fail
-    out
+    Aviffy::new().to_vec(color_av1_data, alpha_av1_data, width, height, depth_bits)
 }
 
 #[test]
