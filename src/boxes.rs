@@ -111,7 +111,7 @@ pub struct MetaBox {
     pub iinf: IinfBox,
     pub pitm: PitmBox,
     pub iprp: IprpBox,
-    pub iref: Option<IrefBox>,
+    pub iref: ArrayVec<[IrefBox; 2]>,
 }
 
 impl MpegBox for MetaBox {
@@ -122,7 +122,7 @@ impl MpegBox for MetaBox {
             + self.iloc.len()
             + self.iinf.len()
             + self.iprp.len()
-            + self.iref.as_ref().map_or(0, |b| b.len())
+            + self.iref.iter().map(|b| b.len()).sum::<usize>()
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -131,7 +131,7 @@ impl MpegBox for MetaBox {
         self.pitm.write(&mut b)?;
         self.iloc.write(&mut b)?;
         self.iinf.write(&mut b)?;
-        if let Some(iref) = &self.iref {
+        for iref in &self.iref {
             iref.write(&mut b)?;
         }
         self.iprp.write(&mut b)

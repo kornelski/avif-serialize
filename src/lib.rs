@@ -38,6 +38,19 @@ impl Aviffy {
             premultiplied_alpha: false,
         }
     }
+
+    /// Set whether image's colorspace uses premultiplied alpha, i.e. RGB channels were multiplied by their alpha value,
+    /// so that transparent areas are all black. Image decoders will be instructed to undo the premultiplication.
+    ///
+    /// Premultiplied alpha images usually compress better and tolerate heavier compression, but
+    /// may not be supported correctly by less capable AVIF decoders.
+    ///
+    /// This just sets the configuration property. The pixel data must have already been processed before compression.
+    pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
+        self.premultiplied_alpha = is_premultiplied;
+        self
+    }
+
     /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
     ///
     /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
@@ -60,7 +73,7 @@ impl Aviffy {
     let mut compatible_brands = ArrayVec::new();
     let mut ipma_entries = ArrayVec::new();
     let mut data_chunks = ArrayVec::<[&[u8]; 4]>::new();
-    let mut iref = None;
+    let mut irefs = ArrayVec::new();
     let mut auxc = None;
     let color_image_id = 1;
     let alpha_image_id = 2;
@@ -110,13 +123,22 @@ impl Aviffy {
         auxc = Some(AuxCBox {
             urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
         });
-        iref = Some(IrefBox {
+        irefs.push(IrefBox {
             entry: IrefEntryBox {
                 from_id: alpha_image_id,
                 to_id: color_image_id,
                 typ: FourCC(*b"auxl"),
             },
         });
+        if self.premultiplied_alpha {
+            irefs.push(IrefBox {
+                entry: IrefEntryBox {
+                    from_id: color_image_id,
+                    to_id: alpha_image_id,
+                    typ: FourCC(*b"prem"),
+                },
+            });
+        }
         ipma_entries.push(IpmaEntry {
             item_id: alpha_image_id,
             prop_ids: [3, 4].iter().copied().collect(),
@@ -183,7 +205,7 @@ impl Aviffy {
                     entries: ipma_entries,
                 },
             },
-            iref,
+            iref: irefs,
         },
         // Here's the actual data. If HEIF wasn't such a kitchen sink, this
         // would have been the only data this file needs.
@@ -226,6 +248,19 @@ fn test_roundtrip_parse_avif() {
 
     let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
 
+    assert_eq!(&test_img[..], ctx.primary_item.as_slice());
+    assert_eq!(&test_alpha[..], ctx.alpha_item.as_deref().unwrap());
+}
+
+#[test]
+fn premultiplied_flag() {
+    let test_img = [1,2,3,4];
+    let test_alpha = [55,66,77,88,99];
+    let avif = Aviffy::new().premultiplied_alpha(true).to_vec(&test_img, Some(&test_alpha), 5, 5, 8);
+
+    let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+
+    assert!(ctx.premultiplied_alpha);
     assert_eq!(&test_img[..], ctx.primary_item.as_slice());
     assert_eq!(&test_alpha[..], ctx.alpha_item.as_deref().unwrap());
 }
