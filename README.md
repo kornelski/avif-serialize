@@ -1,4 +1,4 @@
-# AVIF image serializer
+# AVIF image serializer (muxer)
 
 Minimal writer for AVIF header structure. This is a tiny alternative to [libavif](//lib.rs/libavif).
 It creates the jungle of MPEG/HEIF/MIAF/ISO-BMFF "boxes" as appropriate for AVIF files. Supports alpha channel embedding.
