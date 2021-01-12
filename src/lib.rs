@@ -231,10 +231,9 @@ fn test_roundtrip_parse_mp4() {
     let test_img = b"av12356abc";
     let avif = serialize_to_vec(test_img, None, 10, 20, 8);
 
-    let mut ctx = mp4parse::AvifContext::new();
-    mp4parse::read_avif(&mut avif.as_slice(), &mut ctx).unwrap();
+    let ctx = mp4parse::read_avif(&mut avif.as_slice()).unwrap();
 
-    assert_eq!(&test_img[..], ctx.primary_item.as_slice());
+    assert_eq!(&test_img[..], ctx.primary_item());
 }
 
 #[test]
