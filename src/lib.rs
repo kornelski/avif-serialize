@@ -166,9 +166,6 @@ impl Aviffy {
             data_chunks.push(alpha_data);
             data_chunks.push(color_av1_data);
         } else {
-            // that's a quirk only for opaque images in Firefox
-            compatible_brands.push(FourCC(*b"mif1"));
-
             iloc_items.push(IlocItem {
                 id: color_image_id,
                 extents: [
@@ -179,8 +176,9 @@ impl Aviffy {
                 ].into(),
             });
             data_chunks.push(color_av1_data);
-        }
+        };
 
+        compatible_brands.push(FourCC(*b"mif1"));
         let mut boxes = AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
