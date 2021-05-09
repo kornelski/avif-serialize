@@ -71,7 +71,7 @@ impl Aviffy {
         let mut av1c_items = ArrayVec::new();
         let mut compatible_brands = ArrayVec::new();
         let mut ipma_entries = ArrayVec::new();
-        let mut data_chunks = ArrayVec::<[&[u8]; 4]>::new();
+        let mut data_chunks = ArrayVec::<&[u8], 4>::new();
         let mut irefs = ArrayVec::new();
         let mut auxc = None;
         let color_image_id = 1;

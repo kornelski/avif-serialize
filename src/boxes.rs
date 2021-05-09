@@ -79,7 +79,7 @@ const FULL_BOX_SIZE: usize = BASIC_BOX_SIZE + 4;
 pub struct FtypBox {
     pub major_brand: FourCC,
     pub minor_version: u32,
-    pub compatible_brands: ArrayVec<[FourCC; 1]>,
+    pub compatible_brands: ArrayVec<FourCC, 1>,
 }
 
 /// File Type box (chunk)
@@ -111,7 +111,7 @@ pub struct MetaBox {
     pub iinf: IinfBox,
     pub pitm: PitmBox,
     pub iprp: IprpBox,
-    pub iref: ArrayVec<[IrefBox; 2]>,
+    pub iref: ArrayVec<IrefBox, 2>,
 }
 
 impl MpegBox for MetaBox {
@@ -141,7 +141,7 @@ impl MpegBox for MetaBox {
 /// Item Info box
 #[derive(Debug, Clone)]
 pub struct IinfBox {
-    pub items: ArrayVec<[InfeBox; 2]>,
+    pub items: ArrayVec<InfeBox, 2>,
 }
 
 impl MpegBox for IinfBox {
@@ -218,7 +218,7 @@ impl MpegBox for IprpBox {
 /// Item Property Container box
 #[derive(Debug, Clone)]
 pub struct IpcoBox {
-    pub av1c: ArrayVec<[Av1CBox; 2]>,
+    pub av1c: ArrayVec<Av1CBox, 2>,
     pub ispe: IspeBox,
     pub auxc: Option<AuxCBox>,
 }
@@ -313,12 +313,12 @@ impl MpegBox for IspeBox {
 #[derive(Debug, Clone)]
 pub struct IpmaEntry {
     pub item_id: u16,
-    pub prop_ids: ArrayVec<[u8; 3]>,
+    pub prop_ids: ArrayVec<u8, 3>,
 }
 
 #[derive(Debug, Clone)]
 pub struct IpmaBox {
-    pub entries: ArrayVec<[IpmaEntry; 2]>,
+    pub entries: ArrayVec<IpmaEntry, 2>,
 }
 
 impl MpegBox for IpmaBox {
@@ -461,13 +461,13 @@ impl MpegBox for PitmBox {
 
 #[derive(Debug, Clone)]
 pub struct IlocBox {
-    pub items: ArrayVec<[IlocItem; 2]>,
+    pub items: ArrayVec<IlocItem, 2>,
 }
 
 #[derive(Debug, Clone)]
 pub struct IlocItem {
     pub id: u16,
-    pub extents: ArrayVec<[IlocExtent; 1]>,
+    pub extents: ArrayVec<IlocExtent, 1>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
