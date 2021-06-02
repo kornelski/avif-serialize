@@ -186,6 +186,7 @@ impl Aviffy {
                 compatible_brands,
             },
             meta: MetaBox {
+                hdlr: HdlrBox {},
                 iinf: IinfBox { items: image_items },
                 pitm: PitmBox(color_image_id),
                 iloc: IlocBox { items: iloc_items },

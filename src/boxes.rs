@@ -107,6 +107,7 @@ impl MpegBox for FtypBox {
 /// Metadata box
 #[derive(Debug, Clone)]
 pub struct MetaBox {
+    pub hdlr: HdlrBox,
     pub iloc: IlocBox,
     pub iinf: IinfBox,
     pub pitm: PitmBox,
@@ -118,6 +119,7 @@ impl MpegBox for MetaBox {
     #[inline]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
+            + self.hdlr.len()
             + self.pitm.len()
             + self.iloc.len()
             + self.iinf.len()
@@ -128,6 +130,7 @@ impl MpegBox for MetaBox {
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.new_box(self.len());
         b.full_box(*b"meta", 0)?;
+        self.hdlr.write(&mut b)?;
         self.pitm.write(&mut b)?;
         self.iloc.write(&mut b)?;
         self.iinf.write(&mut b)?;
@@ -192,6 +195,28 @@ impl MpegBox for InfeBox {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HdlrBox {
+}
+
+impl MpegBox for HdlrBox {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        FULL_BOX_SIZE + 4 + 4 + 12
+    }
+
+    fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        let mut b = w.new_box(self.len());
+        b.full_box(*b"hdlr", 0)?;
+        b.u32(0)?; // ???
+        // because an image format needs to be told it's an image format
+        b.push(b"pict")?;
+        b.u32(0)?; // ???
+        b.u32(0)?; // ???
+        b.u32(0)?; // ???
+        Ok(())
+    }
+}
 /// Item properties + associations
 #[derive(Debug, Clone)]
 pub struct IprpBox {
