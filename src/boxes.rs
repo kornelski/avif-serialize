@@ -151,7 +151,7 @@ impl MpegBox for IinfBox {
     #[inline]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
-        + 2 // num entries
+        + 2 // num items u16
         + self.items.iter().map(|item| item.len()).sum::<usize>()
     }
 
@@ -240,32 +240,60 @@ impl MpegBox for IprpBox {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum IpcoProp {
+    Av1C(Av1CBox),
+    Ispe(IspeBox),
+    AuxC(AuxCBox),
+}
+
+impl IpcoProp {
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Av1C(p) => p.len(),
+            Self::Ispe(p) => p.len(),
+            Self::AuxC(p) => p.len(),
+        }
+    }
+
+    pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        match self {
+            Self::Av1C(p) => p.write(w),
+            Self::Ispe(p) => p.write(w),
+            Self::AuxC(p) => p.write(w),
+        }
+    }
+}
+
 /// Item Property Container box
 #[derive(Debug, Clone)]
 pub struct IpcoBox {
-    pub av1c: ArrayVec<Av1CBox, 2>,
-    pub ispe: IspeBox,
-    pub auxc: Option<AuxCBox>,
+    props: Vec<IpcoProp>,
+}
+
+impl IpcoBox {
+    pub fn new() -> Self {
+        Self { props: Vec::new() }
+    }
+
+    pub fn push(&mut self, prop: IpcoProp) -> u8 {
+        self.props.push(prop);
+        self.props.len() as u8 // the spec wants them off by one
+    }
 }
 
 impl MpegBox for IpcoBox {
     #[inline]
     fn len(&self) -> usize {
         BASIC_BOX_SIZE
-            + self.ispe.len()
-            + self.av1c.iter().map(|a| a.len()).sum::<usize>()
-            + self.auxc.map_or(0, |a| a.len())
+            + self.props.iter().map(|a| a.len()).sum::<usize>()
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.new_box(self.len());
         b.basic_box(*b"ipco")?;
-        self.ispe.write(&mut b)?;
-        for a in self.av1c.iter() {
-            a.write(&mut b)?;
-        }
-        if let Some(a) = &self.auxc {
-            a.write(&mut b)?;
+        for p in self.props.iter() {
+            p.write(&mut b)?;
         }
         Ok(())
     }

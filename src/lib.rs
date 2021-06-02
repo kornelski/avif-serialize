@@ -68,12 +68,11 @@ impl Aviffy {
     pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
-        let mut av1c_items = ArrayVec::new();
         let mut compatible_brands = ArrayVec::new();
         let mut ipma_entries = ArrayVec::new();
         let mut data_chunks = ArrayVec::<&[u8], 4>::new();
         let mut irefs = ArrayVec::new();
-        let mut auxc = None;
+        let mut ipco = IpcoBox::new();
         let color_image_id = 1;
         let alpha_image_id = 2;
         let high_bitdepth = depth_bits >= 10;
@@ -84,8 +83,9 @@ impl Aviffy {
             typ: FourCC(*b"av01"),
             name: "",
         });
+        let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height }));
         // This is redundant, but Chrome wants it, and checks that it matches :(
-        av1c_items.push(Av1CBox {
+        let av1c_prop = ipco.push(IpcoProp::Av1C(Av1CBox {
             seq_profile: false,
             seq_level_idx_0: 0,
             seq_tier_0: false,
@@ -95,10 +95,10 @@ impl Aviffy {
             chroma_subsampling_x: false,
             chroma_subsampling_y: false,
             chroma_sample_position: 0,
-        });
+        }));
         ipma_entries.push(IpmaEntry {
             item_id: color_image_id,
-            prop_ids: [1, 2].iter().copied().collect(),
+            prop_ids: [ispe_prop, av1c_prop].iter().copied().collect(),
         });
 
         if let Some(alpha_data) = alpha_av1_data {
@@ -107,7 +107,7 @@ impl Aviffy {
                 typ: FourCC(*b"av01"),
                 name: "",
             });
-            av1c_items.push(Av1CBox {
+            let av1c_prop = ipco.push(boxes::IpcoProp::Av1C(Av1CBox {
                 seq_profile: false,
                 seq_level_idx_0: 0,
                 seq_tier_0: false,
@@ -117,11 +117,12 @@ impl Aviffy {
                 chroma_subsampling_x: false,
                 chroma_subsampling_y: false,
                 chroma_sample_position: 0,
-            });
+            }));
+
             // that's a silly way to add 1 bit of information, isn't it?
-            auxc = Some(AuxCBox {
+            let auxc_prop = ipco.push(IpcoProp::AuxC(AuxCBox {
                 urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
-            });
+            }));
             irefs.push(IrefBox {
                 entry: IrefEntryBox {
                     from_id: alpha_image_id,
@@ -140,7 +141,7 @@ impl Aviffy {
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [3, 4].iter().copied().collect(),
+                prop_ids: [av1c_prop, auxc_prop].iter().copied().collect(),
             });
 
             // Use interleaved color and alpha, with alpha first.
@@ -191,12 +192,7 @@ impl Aviffy {
                 pitm: PitmBox(color_image_id),
                 iloc: IlocBox { items: iloc_items },
                 iprp: IprpBox {
-                    ipco: IpcoBox {
-                        // This is redundant data inherited from the HEIF spec.
-                        ispe: IspeBox { width, height },
-                        av1c: av1c_items,
-                        auxc,
-                    },
+                    ipco,
                     // It's not enough to define these properties,
                     // they must be assigned to the image
                     ipma: IpmaBox {
