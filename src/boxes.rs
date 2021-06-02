@@ -271,12 +271,12 @@ impl IpcoProp {
 /// Item Property Container box
 #[derive(Debug, Clone)]
 pub struct IpcoBox {
-    props: Vec<IpcoProp>,
+    props: ArrayVec<IpcoProp, 6>,
 }
 
 impl IpcoBox {
     pub fn new() -> Self {
-        Self { props: Vec::new() }
+        Self { props: ArrayVec::new() }
     }
 
     pub fn push(&mut self, prop: IpcoProp) -> u8 {
