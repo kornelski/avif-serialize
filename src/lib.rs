@@ -96,9 +96,14 @@ impl Aviffy {
             chroma_subsampling_y: false,
             chroma_sample_position: 0,
         }));
+        // Useless bloat
+        let pixi_3 = ipco.push(IpcoProp::Pixi(PixiBox {
+            channels: 3,
+            depth: 8,
+        }));
         ipma_entries.push(IpmaEntry {
             item_id: color_image_id,
-            prop_ids: [ispe_prop, av1c_prop].iter().copied().collect(),
+            prop_ids: [ispe_prop, av1c_prop, pixi_3].iter().copied().collect(),
         });
 
         if let Some(alpha_data) = alpha_av1_data {
@@ -117,6 +122,11 @@ impl Aviffy {
                 chroma_subsampling_x: false,
                 chroma_subsampling_y: false,
                 chroma_sample_position: 0,
+            }));
+            // So pointless
+            let pixi_1 = ipco.push(IpcoProp::Pixi(PixiBox {
+                channels: 1,
+                depth: 8,
             }));
 
             // that's a silly way to add 1 bit of information, isn't it?
@@ -141,7 +151,7 @@ impl Aviffy {
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [av1c_prop, auxc_prop].iter().copied().collect(),
+                prop_ids: [av1c_prop, auxc_prop, pixi_1].iter().copied().collect(),
             });
 
             // Use interleaved color and alpha, with alpha first.

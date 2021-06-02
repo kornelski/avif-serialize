@@ -243,6 +243,7 @@ impl MpegBox for IprpBox {
 #[derive(Debug, Clone)]
 pub enum IpcoProp {
     Av1C(Av1CBox),
+    Pixi(PixiBox),
     Ispe(IspeBox),
     AuxC(AuxCBox),
 }
@@ -251,6 +252,7 @@ impl IpcoProp {
     pub fn len(&self) -> usize {
         match self {
             Self::Av1C(p) => p.len(),
+            Self::Pixi(p) => p.len(),
             Self::Ispe(p) => p.len(),
             Self::AuxC(p) => p.len(),
         }
@@ -259,6 +261,7 @@ impl IpcoProp {
     pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         match self {
             Self::Av1C(p) => p.write(w),
+            Self::Pixi(p) => p.write(w),
             Self::Ispe(p) => p.write(w),
             Self::AuxC(p) => p.write(w),
         }
@@ -317,29 +320,29 @@ impl AuxCBox {
     }
 }
 
-// /// Pixies, I guess.
-// #[derive(Debug, Copy, Clone)]
-// pub struct PixiBox {
-//     depth: u8,
-//     channels: u8,
-// }
+/// Pixies, I guess.
+#[derive(Debug, Copy, Clone)]
+pub struct PixiBox {
+    pub depth: u8,
+    pub channels: u8,
+}
 
-// impl PixiBox {
-//     pub fn len(&self) -> usize {
-//         BASIC_BOX_SIZE
-//             + 1 + self.channels as usize
-//     }
+impl PixiBox {
+    pub fn len(&self) -> usize {
+        FULL_BOX_SIZE
+            + 1 + self.channels as usize
+    }
 
-//     pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-//         let mut b = w.new_box(self.len());
-//         b.basic_box(*b"pixi")?;
-//         b.u8(self.channels)?;
-//         for _ in 0..self.channels {
-//             b.u8(self.depth)?;
-//         }
-//         Ok(())
-//     }
-// }
+    pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        let mut b = w.new_box(self.len());
+        b.full_box(*b"pixi", 0)?;
+        b.u8(self.channels)?;
+        for _ in 0..self.channels {
+            b.u8(self.depth)?;
+        }
+        Ok(())
+    }
+}
 
 /// This is HEVC-specific and not for AVIF, but Chrome wants it :(
 #[derive(Debug, Copy, Clone)]
