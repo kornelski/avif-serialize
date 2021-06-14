@@ -202,21 +202,24 @@ pub struct HdlrBox {
 impl MpegBox for HdlrBox {
     #[inline(always)]
     fn len(&self) -> usize {
-        FULL_BOX_SIZE + 4 + 4 + 12
+        FULL_BOX_SIZE + 4 + 4 + 13
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.new_box(self.len());
+        // because an image format needs to be told it's an image format,
+        // and it does it the way classic MacOS used to, because Quicktime.
         b.full_box(*b"hdlr", 0)?;
-        b.u32(0)?; // ???
-        // because an image format needs to be told it's an image format
-        b.push(b"pict")?;
-        b.u32(0)?; // ???
-        b.u32(0)?; // ???
-        b.u32(0)?; // ???
+        b.u32(0)?; // old MacOS file type handler
+        b.push(b"pict")?; // MacOS Quicktime subtype
+        b.push(b"Rust")?; // Quicktime manufacturer
+        b.u32(0)?; // Reserved
+        b.u32(0)?; // Reserved
+        b.u8(0)?; // Pascal string for component name
         Ok(())
     }
 }
+
 /// Item properties + associations
 #[derive(Debug, Clone)]
 pub struct IprpBox {
