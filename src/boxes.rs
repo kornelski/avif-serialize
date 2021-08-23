@@ -212,7 +212,7 @@ impl MpegBox for HdlrBox {
         b.full_box(*b"hdlr", 0)?;
         b.u32(0)?; // old MacOS file type handler
         b.push(b"pict")?; // MacOS Quicktime subtype
-        b.push(b"Rust")?; // Quicktime manufacturer
+        b.u32(0)?; // Firefox 92 wants all 0 here
         b.u32(0)?; // Reserved
         b.u32(0)?; // Reserved
         b.u8(0)?; // Pascal string for component name
