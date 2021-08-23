@@ -238,9 +238,9 @@ fn test_roundtrip_parse_mp4() {
     let test_img = b"av12356abc";
     let avif = serialize_to_vec(test_img, None, 10, 20, 8);
 
-    let ctx = mp4parse::read_avif(&mut avif.as_slice()).unwrap();
+    let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
-    assert_eq!(&test_img[..], ctx.primary_item());
+    assert_eq!(&test_img[..], ctx.primary_item_coded_data());
 }
 
 #[test]
@@ -249,10 +249,10 @@ fn test_roundtrip_parse_mp4_alpha() {
     let test_a = b"alpha";
     let avif = serialize_to_vec(test_img, Some(test_a), 10, 20, 8);
 
-    let ctx = mp4parse::read_avif(&mut avif.as_slice()).unwrap();
+    let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
-    assert_eq!(&test_img[..], ctx.primary_item());
-    assert_eq!(&test_a[..], ctx.alpha_item().unwrap());
+    assert_eq!(&test_img[..], ctx.primary_item_coded_data());
+    assert_eq!(&test_a[..], ctx.alpha_item_coded_data());
 }
 
 #[test]

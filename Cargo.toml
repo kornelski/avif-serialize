@@ -16,5 +16,5 @@ include = ["src/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 arrayvec = "0.7.0"
 
 [dev-dependencies]
-mp4parse = "0.11.5"
+mp4parse = { git = "https://github.com/mozilla/mp4parse-rust", rev = "c6ba5afd856c158d9cfc1a447165fcfaaf2b797c" }
 avif-parse = "0.13.1"
