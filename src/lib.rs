@@ -1,3 +1,13 @@
+//! # AVIF image serializer (muxer)
+//!
+//! ## Usage
+//!
+//! 1. Compress pixels using an AV1 encoder, such as [rav1e](//lib.rs/rav1e). [libaom](//lib.rs/libaom-sys) works too.
+//!
+//! 2. Call `avif_serialize::serialize_to_vec(av1_data, None, width, height, 8)`
+//!
+//! See [cavif](https://github.com/kornelski/cavif-rs) for a complete implementation.
+
 mod boxes;
 mod writer;
 
