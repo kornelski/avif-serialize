@@ -200,6 +200,7 @@ impl Aviffy {
         };
 
         compatible_brands.push(FourCC(*b"mif1"));
+        compatible_brands.push(FourCC(*b"miaf"));
         let mut boxes = AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
