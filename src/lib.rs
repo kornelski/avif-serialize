@@ -161,7 +161,7 @@ impl Aviffy {
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [av1c_prop, auxc_prop, pixi_1].iter().copied().collect(),
+                prop_ids: [ispe_prop, av1c_prop, auxc_prop, pixi_1].iter().copied().collect(),
             });
 
             // Use interleaved color and alpha, with alpha first.
