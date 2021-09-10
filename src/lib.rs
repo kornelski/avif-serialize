@@ -96,8 +96,8 @@ impl Aviffy {
         let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height }));
         // This is redundant, but Chrome wants it, and checks that it matches :(
         let av1c_prop = ipco.push(IpcoProp::Av1C(Av1CBox {
-            seq_profile: false,
-            seq_level_idx_0: 0,
+            seq_profile: if twelve_bit { 2 } else { 1 },
+            seq_level_idx_0: 31,
             seq_tier_0: false,
             high_bitdepth,
             twelve_bit,
@@ -123,14 +123,14 @@ impl Aviffy {
                 name: "",
             });
             let av1c_prop = ipco.push(boxes::IpcoProp::Av1C(Av1CBox {
-                seq_profile: false,
-                seq_level_idx_0: 0,
+                seq_profile: if twelve_bit { 2 } else { 0 },
+                seq_level_idx_0: 31,
                 seq_tier_0: false,
                 high_bitdepth,
                 twelve_bit,
                 monochrome: true,
-                chroma_subsampling_x: false,
-                chroma_subsampling_y: false,
+                chroma_subsampling_x: true,
+                chroma_subsampling_y: true,
                 chroma_sample_position: 0,
             }));
             // So pointless

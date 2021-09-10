@@ -464,7 +464,7 @@ impl MpegBox for AuxlBox {
 
 #[derive(Debug, Copy, Clone)]
 pub struct Av1CBox {
-    pub seq_profile: bool,
+    pub seq_profile: u8,
     pub seq_level_idx_0: u8,
     pub seq_tier_0: bool,
     pub high_bitdepth: bool,
@@ -485,13 +485,13 @@ impl MpegBox for Av1CBox {
         let mut b = w.new_box(self.len());
         b.basic_box(*b"av1C")?;
         let flags1 =
-            (self.seq_tier_0 as u8) |
-            (self.high_bitdepth as u8) << 1 |
-            (self.twelve_bit as u8) << 2 |
-            (self.monochrome as u8) << 3 |
-            (self.chroma_subsampling_x as u8) << 4 |
-            (self.chroma_subsampling_y as u8) << 5 |
-            (self.chroma_sample_position as u8) << 6;
+            (self.seq_tier_0 as u8) << 7 |
+            (self.high_bitdepth as u8) << 6 |
+            (self.twelve_bit as u8) << 5 |
+            (self.monochrome as u8) << 4 |
+            (self.chroma_subsampling_x as u8) << 3 |
+            (self.chroma_subsampling_y as u8) << 2 |
+            (self.chroma_sample_position as u8);
 
         b.push(&[
             0x81, // marker and version
