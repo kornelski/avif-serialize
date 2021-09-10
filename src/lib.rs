@@ -87,6 +87,7 @@ impl Aviffy {
         let alpha_image_id = 2;
         let high_bitdepth = depth_bits >= 10;
         let twelve_bit = depth_bits >= 12;
+        const ESSENTIAL_BIT: u8 = 0x80;
 
         image_items.push(InfeBox {
             id: color_image_id,
@@ -113,7 +114,7 @@ impl Aviffy {
         }));
         ipma_entries.push(IpmaEntry {
             item_id: color_image_id,
-            prop_ids: [ispe_prop, av1c_prop, pixi_3].iter().copied().collect(),
+            prop_ids: [ispe_prop, av1c_prop | ESSENTIAL_BIT, pixi_3].iter().copied().collect(),
         });
 
         if let Some(alpha_data) = alpha_av1_data {
@@ -161,7 +162,7 @@ impl Aviffy {
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [ispe_prop, av1c_prop, auxc_prop, pixi_1].iter().copied().collect(),
+                prop_ids: [ispe_prop, av1c_prop | ESSENTIAL_BIT, auxc_prop, pixi_1].iter().copied().collect(),
             });
 
             // Use interleaved color and alpha, with alpha first.
