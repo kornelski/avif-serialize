@@ -1,8 +1,8 @@
 [package]
 name = "avif-serialize"
-version = "0.7.6"
+version = "0.7.7"
 authors = ["Kornel Lesiński <kornel@geekhood.net>"]
-edition = "2018"
+edition = "2021"
 license = "BSD-3-Clause"
 description = "Minimal writer for AVIF header structure (MPEG/HEIF/MIAF/ISO-BMFF)"
 readme = "README.md"
