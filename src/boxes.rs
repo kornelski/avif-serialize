@@ -1,6 +1,6 @@
+use crate::constants::ColorPrimaries;
 use crate::constants::MatrixCoefficients;
 use crate::constants::TransferCharacteristics;
-use crate::constants::ColorPrimaries;
 use crate::writer::Writer;
 use crate::writer::WriterBackend;
 use crate::writer::IO;
@@ -47,9 +47,7 @@ impl AvifFile<'_> {
         for iloc_item in self.meta.iloc.items.iter_mut() {
             for ex in iloc_item.extents.iter_mut() {
                 let abs = match ex.offset {
-                    IlocOffset::Relative(ref mut n) => {
-                        *n as u32 + start_offset
-                    },
+                    IlocOffset::Relative(n) => n as u32 + start_offset,
                     IlocOffset::Absolute(_) => continue,
                 };
                 ex.offset = IlocOffset::Absolute(abs);
@@ -528,17 +526,17 @@ impl MpegBox for Av1CBox {
         let mut b = w.new_box(self.len());
         b.basic_box(*b"av1C")?;
         let flags1 =
-            (self.seq_tier_0 as u8) << 7 |
-            (self.high_bitdepth as u8) << 6 |
-            (self.twelve_bit as u8) << 5 |
-            (self.monochrome as u8) << 4 |
-            (self.chroma_subsampling_x as u8) << 3 |
-            (self.chroma_subsampling_y as u8) << 2 |
-            (self.chroma_sample_position as u8);
+            u8::from(self.seq_tier_0) << 7 |
+            u8::from(self.high_bitdepth) << 6 |
+            u8::from(self.twelve_bit) << 5 |
+            u8::from(self.monochrome) << 4 |
+            u8::from(self.chroma_subsampling_x) << 3 |
+            u8::from(self.chroma_subsampling_y) << 2 |
+            self.chroma_sample_position;
 
         b.push(&[
             0x81, // marker and version
-            ((self.seq_profile as u8) << 5) | self.seq_level_idx_0, // x2d == 45
+            (self.seq_profile << 5) | self.seq_level_idx_0, // x2d == 45
             flags1,
             0,
         ])

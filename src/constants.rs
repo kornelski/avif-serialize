@@ -1,4 +1,3 @@
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ColorPrimaries {
@@ -24,11 +23,11 @@ pub enum TransferCharacteristics {
     /// ITU-R BT601-6 525
     Bt601 = 6,
     /// "Linear transfer characteristics"
-    Linear  = 8,
+    Linear = 8,
     /// "Logarithmic transfer characteristic (100:1 range)"
     Log = 9,
     /// "Logarithmic transfer characteristic (100 * Sqrt(10) : 1 range)"
-    LogSqrt  = 10,
+    LogSqrt = 10,
     /// sRGB
     Srgb = 13,
     /// ITU-R BT2020 for 10-bit system
@@ -49,7 +48,7 @@ pub enum MatrixCoefficients {
     Bt601 = 6,
     Ycgco = 8,
     /// ITU-R BT2020 non-constant luminance system
-    Bt2020Ncl  = 9,
+    Bt2020Ncl = 9,
     /// ITU-R BT2020 constant luminance system
     Bt2020Cl = 10,
 }
