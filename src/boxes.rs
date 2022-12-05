@@ -625,9 +625,9 @@ impl MpegBox for IlocBox {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct MdatBox<'data> {
-    pub data_chunks: &'data [&'data [u8]],
+    pub data_chunks: ArrayVec<&'data [u8], 4>,
 }
 
 impl MpegBox for MdatBox<'_> {
@@ -639,7 +639,7 @@ impl MpegBox for MdatBox<'_> {
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.new_box(self.len());
         b.basic_box(*b"mdat")?;
-        for ch in self.data_chunks {
+        for ch in &self.data_chunks {
             b.push(ch)?;
         }
         Ok(())

@@ -108,11 +108,15 @@ impl Aviffy {
     ///
     /// Data is written (streamed) to `into_output`.
     pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
+        self.make_boxes(color_av1_data, alpha_av1_data, width, height, depth_bits).write(into_output)
+    }
+
+    fn make_boxes<'data>(&self, color_av1_data: &'data [u8], alpha_av1_data: Option<&'data [u8]>, width: u32, height: u32, depth_bits: u8) -> AvifFile<'data> {
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
         let mut compatible_brands = ArrayVec::new();
         let mut ipma_entries = ArrayVec::new();
-        let mut data_chunks = ArrayVec::<&[u8], 4>::new();
+        let mut data_chunks = ArrayVec::new();
         let mut irefs = ArrayVec::new();
         let mut ipco = IpcoBox::new();
         let color_image_id = 1;
@@ -240,7 +244,7 @@ impl Aviffy {
 
         compatible_brands.push(FourCC(*b"mif1"));
         compatible_brands.push(FourCC(*b"miaf"));
-        let mut boxes = AvifFile {
+        AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
                 minor_version: 0,
@@ -264,11 +268,9 @@ impl Aviffy {
             // Here's the actual data. If HEIF wasn't such a kitchen sink, this
             // would have been the only data this file needs.
             mdat: MdatBox {
-                data_chunks: &data_chunks,
+                data_chunks,
             },
-        };
-
-        boxes.write(into_output)
+        }
     }
 
     pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
