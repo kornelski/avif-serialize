@@ -379,7 +379,7 @@ impl MpegBox for IspeBox {
 #[derive(Debug, Clone)]
 pub struct IpmaEntry {
     pub item_id: u16,
-    pub prop_ids: ArrayVec<u8, 4>,
+    pub prop_ids: ArrayVec<u8, 5>,
 }
 
 #[derive(Debug, Clone)]

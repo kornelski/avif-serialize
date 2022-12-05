@@ -4,6 +4,7 @@
 pub enum ColorPrimaries {
     /// ITU-R BT1361
     Bt709 = 1,
+    Unspecified = 2,
     /// ITU-R BT601-6 525
     Bt601 = 6,
     /// ITU-R BT2020

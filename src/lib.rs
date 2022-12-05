@@ -102,12 +102,12 @@ impl Aviffy {
     /// Alpha adds a lot of header bloat, so don't specify it unless it's necessary.
     ///
     /// `width`/`height` is image size in pixels. It must of course match the size of encoded image data.
-    /// `depth_bits` should be 8, 10 or 12, depending on how the color channels of the image were encoded (typically 8).
+    /// `depth_bits` should be 8, 10 or 12, depending on how the image has been encoded in AV1.
     ///
-    /// Color and alpha must have the same dimensions. Alpha must always have 8 bit depth.
+    /// Color and alpha must have the same dimensions and depth.
     ///
     /// Data is written (streamed) to `into_output`.
-    pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, color_depth_bits: u8) -> io::Result<()> {
+    pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
         let mut compatible_brands = ArrayVec::new();
@@ -118,7 +118,8 @@ impl Aviffy {
         let color_image_id = 1;
         let alpha_image_id = 2;
         const ESSENTIAL_BIT: u8 = 0x80;
-        let alpha_depth_bits = 8;
+        let color_depth_bits = depth_bits;
+        let alpha_depth_bits = depth_bits; // Sadly, the spec requires these to match.
 
         image_items.push(InfeBox {
             id: color_image_id,
@@ -143,7 +144,7 @@ impl Aviffy {
             channels: 3,
             depth: color_depth_bits,
         }));
-        let mut prop_ids: ArrayVec<u8, 4> = [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].into_iter().collect();
+        let mut prop_ids: ArrayVec<u8, 5> = [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].into_iter().collect();
         // Redundant info, already in AV1
         if self.colr != Default::default() {
             let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr));
