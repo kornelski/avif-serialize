@@ -10,6 +10,7 @@
 
 mod boxes;
 mod writer;
+pub mod constants;
 
 use crate::boxes::*;
 use arrayvec::ArrayVec;
@@ -20,6 +21,7 @@ use std::io;
 /// See [`Aviffy::new`].
 pub struct Aviffy {
     premultiplied_alpha: bool,
+    colr: ColrBox,
 }
 
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
@@ -45,6 +47,7 @@ impl Aviffy {
     pub fn new() -> Self {
         Self {
             premultiplied_alpha: false,
+            colr: Default::default(),
         }
     }
 
@@ -57,6 +60,35 @@ impl Aviffy {
     /// This just sets the configuration property. The pixel data must have already been processed before compression.
     pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
         self.premultiplied_alpha = is_premultiplied;
+        self
+    }
+
+    /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
+    /// Defaults to BT.601, because that's what Safari assumes when `colr` is missing.
+    /// Other browsers are smart enough to read this from the AV1 payload instead.
+    pub fn matrix_coefficients(&mut self, matrix_coefficients: constants::MatrixCoefficients) -> &mut Self {
+        self.colr.matrix_coefficients = matrix_coefficients;
+        self
+    }
+
+    /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
+    /// Defaults to sRGB.
+    pub fn transfer_characteristics(&mut self, transfer_characteristics: constants::TransferCharacteristics) -> &mut Self {
+        self.colr.transfer_characteristics = transfer_characteristics;
+        self
+    }
+
+    /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
+    /// Defaults to sRGB/Rec.709.
+    pub fn color_primaries(&mut self, color_primaries: constants::ColorPrimaries) -> &mut Self {
+        self.colr.color_primaries = color_primaries;
+        self
+    }
+
+    /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
+    /// Defaults to full.
+    pub fn full_color_range(&mut self, full_range: bool) -> &mut Self {
+        self.colr.full_range_flag = full_range;
         self
     }
 
@@ -111,9 +143,15 @@ impl Aviffy {
             channels: 3,
             depth: color_depth_bits,
         }));
+        let mut prop_ids: ArrayVec<u8, 4> = [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].into_iter().collect();
+        // Redundant info, already in AV1
+        if self.colr != Default::default() {
+            let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr));
+            prop_ids.push(colr_color_prop);
+        }
         ipma_entries.push(IpmaEntry {
             item_id: color_image_id,
-            prop_ids: [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].iter().copied().collect(),
+            prop_ids,
         });
 
         if let Some(alpha_data) = alpha_av1_data {
@@ -161,7 +199,7 @@ impl Aviffy {
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [ispe_prop, av1c_alpha_prop | ESSENTIAL_BIT, auxc_prop, pixi_1].iter().copied().collect(),
+                prop_ids: [ispe_prop, av1c_alpha_prop | ESSENTIAL_BIT, auxc_prop, pixi_1].into_iter().collect(),
             });
 
             // Use interleaved color and alpha, with alpha first.
@@ -271,6 +309,20 @@ fn test_roundtrip_parse_avif() {
     let test_img = [1,2,3,4,5,6];
     let test_alpha = [77,88,99];
     let avif = serialize_to_vec(&test_img, Some(&test_alpha), 10, 20, 8);
+
+    let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+
+    assert_eq!(&test_img[..], ctx.primary_item.as_slice());
+    assert_eq!(&test_alpha[..], ctx.alpha_item.as_deref().unwrap());
+}
+
+#[test]
+fn test_roundtrip_parse_avif_colr() {
+    let test_img = [1,2,3,4,5,6];
+    let test_alpha = [77,88,99];
+    let avif = Aviffy::new()
+        .matrix_coefficients(constants::MatrixCoefficients::Bt709)
+        .to_vec(&test_img, Some(&test_alpha), 10, 20, 8);
 
     let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
 

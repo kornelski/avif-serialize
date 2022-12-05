@@ -1,6 +1,6 @@
 [package]
 name = "avif-serialize"
-version = "0.7.7"
+version = "0.8.0"
 authors = ["Kornel Lesiński <kornel@geekhood.net>"]
 edition = "2021"
 license = "BSD-3-Clause"

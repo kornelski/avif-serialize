@@ -1,3 +1,6 @@
+use crate::constants::MatrixCoefficients;
+use crate::constants::TransferCharacteristics;
+use crate::constants::ColorPrimaries;
 use crate::writer::Writer;
 use crate::writer::WriterBackend;
 use crate::writer::IO;
@@ -244,11 +247,13 @@ impl MpegBox for IprpBox {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum IpcoProp {
     Av1C(Av1CBox),
     Pixi(PixiBox),
     Ispe(IspeBox),
     AuxC(AuxCBox),
+    Colr(ColrBox),
 }
 
 impl IpcoProp {
@@ -258,6 +263,7 @@ impl IpcoProp {
             Self::Pixi(p) => p.len(),
             Self::Ispe(p) => p.len(),
             Self::AuxC(p) => p.len(),
+            Self::Colr(p) => p.len(),
         }
     }
 
@@ -267,6 +273,7 @@ impl IpcoProp {
             Self::Pixi(p) => p.write(w),
             Self::Ispe(p) => p.write(w),
             Self::AuxC(p) => p.write(w),
+            Self::Colr(p) => p.write(w),
         }
     }
 }
@@ -274,7 +281,7 @@ impl IpcoProp {
 /// Item Property Container box
 #[derive(Debug, Clone)]
 pub struct IpcoBox {
-    props: ArrayVec<IpcoProp, 6>,
+    props: ArrayVec<IpcoProp, 7>,
 }
 
 impl IpcoBox {
@@ -462,6 +469,42 @@ impl MpegBox for AuxlBox {
     }
 }
 
+/// ColourInformationBox
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct ColrBox {
+    pub color_primaries: ColorPrimaries,
+    pub transfer_characteristics: TransferCharacteristics,
+    pub matrix_coefficients: MatrixCoefficients,
+    pub full_range_flag: bool, // u1 + u7
+}
+
+impl Default for ColrBox {
+    fn default() -> Self {
+        Self {
+            color_primaries: ColorPrimaries::Bt709,
+            transfer_characteristics: TransferCharacteristics::Srgb,
+            matrix_coefficients: MatrixCoefficients::Bt601,
+            full_range_flag: true,
+        }
+    }
+}
+
+impl MpegBox for ColrBox {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        BASIC_BOX_SIZE + 4 + 2 + 2 + 2 + 1
+    }
+
+    fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        let mut b = w.new_box(self.len());
+        b.basic_box(*b"colr")?;
+        b.u32(u32::from_be_bytes(*b"nclx"))?;
+        b.u16(self.color_primaries as u16)?;
+        b.u16(self.transfer_characteristics as u16)?;
+        b.u16(self.matrix_coefficients as u16)?;
+        b.u8(if self.full_range_flag { 1 << 7 } else { 0 })
+    }
+}
 #[derive(Debug, Copy, Clone)]
 pub struct Av1CBox {
     pub seq_profile: u8,
