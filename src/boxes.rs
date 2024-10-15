@@ -125,7 +125,9 @@ impl MpegBox for MetaBox {
             + self.iloc.len()
             + self.iinf.len()
             + self.iprp.len()
-            + self.iref.iter().map(|b| b.len()).sum::<usize>()
+            + IrefBox2 {
+                entries: self.iref.iter().map(|e| e.entry).collect(),
+            }.len()
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -135,9 +137,10 @@ impl MpegBox for MetaBox {
         self.pitm.write(&mut b)?;
         self.iloc.write(&mut b)?;
         self.iinf.write(&mut b)?;
-        for iref in &self.iref {
-            iref.write(&mut b)?;
-        }
+        let iref_fixed = IrefBox2 {
+            entries: self.iref.iter().map(|e| e.entry).collect(),
+        };
+        iref_fixed.write(&mut b)?;
         self.iprp.write(&mut b)
     }
 }
@@ -434,6 +437,7 @@ impl MpegBox for IrefEntryBox {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[repr(transparent)]
 pub struct IrefBox {
     pub entry: IrefEntryBox,
 }
@@ -448,6 +452,27 @@ impl MpegBox for IrefBox {
         let mut b = w.new_box(self.len());
         b.full_box(*b"iref", 0)?;
         self.entry.write(&mut b)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct IrefBox2 {
+    pub entries: ArrayVec<IrefEntryBox, 2>,
+}
+
+impl MpegBox for IrefBox2 {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        FULL_BOX_SIZE + self.entries.iter().map(|e| e.len()).sum::<usize>()
+    }
+
+    fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        let mut b = w.new_box(self.len());
+        b.full_box(*b"iref", 0)?;
+        for entry in &self.entries {
+            entry.write(&mut b)?
+        }
+        Ok(())
     }
 }
 
