@@ -293,7 +293,7 @@ fn test_roundtrip_parse_mp4() {
 
     let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
-    assert_eq!(&test_img[..], ctx.primary_item_coded_data());
+    assert_eq!(&test_img[..], ctx.primary_item_coded_data().unwrap());
 }
 
 #[test]
@@ -304,8 +304,8 @@ fn test_roundtrip_parse_mp4_alpha() {
 
     let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
-    assert_eq!(&test_img[..], ctx.primary_item_coded_data());
-    assert_eq!(&test_a[..], ctx.alpha_item_coded_data());
+    assert_eq!(&test_img[..], ctx.primary_item_coded_data().unwrap());
+    assert_eq!(&test_a[..], ctx.alpha_item_coded_data().unwrap());
 }
 
 #[test]

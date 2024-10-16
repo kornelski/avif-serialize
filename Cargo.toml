@@ -16,8 +16,9 @@ include = ["src/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 arrayvec = "0.7.6"
 
 [dev-dependencies]
-mp4parse = { git = "https://github.com/mozilla/mp4parse-rust", rev = "c6ba5afd856c158d9cfc1a447165fcfaaf2b797c" }
+mp4parse = "0.17"
 avif-parse = "1.2.0"
+fallible_collections = { version = "0.4.9", default-features = false, features = ["rust_1_57", "std"] }
 
 [badges]
 maintenance = { status = "passively-maintained" }
