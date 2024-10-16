@@ -1,6 +1,6 @@
 [package]
 name = "avif-serialize"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Kornel Lesiński <kornel@geekhood.net>"]
 edition = "2021"
 license = "BSD-3-Clause"
@@ -13,7 +13,7 @@ homepage = "https://lib.rs/avif-serialize"
 include = ["src/*.rs", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-arrayvec = "0.7.2"
+arrayvec = "0.7.6"
 
 [dev-dependencies]
 mp4parse = { git = "https://github.com/mozilla/mp4parse-rust", rev = "c6ba5afd856c158d9cfc1a447165fcfaaf2b797c" }
@@ -21,3 +21,7 @@ avif-parse = "1.0.0"
 
 [badges]
 maintenance = { status = "passively-maintained" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--generate-link-to-definition"]

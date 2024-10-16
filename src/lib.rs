@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! 1. Compress pixels using an AV1 encoder, such as [rav1e](//lib.rs/rav1e). [libaom](//lib.rs/libaom-sys) works too.
+//! 1. Compress pixels using an AV1 encoder, such as [rav1e](https://lib.rs/rav1e). [libaom](https://lib.rs/libaom-sys) works too.
 //!
 //! 2. Call `avif_serialize::serialize_to_vec(av1_data, None, width, height, 8)`
 //!
@@ -24,7 +24,7 @@ pub struct Aviffy {
     colr: ColrBox,
 }
 
-/// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
+/// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
 ///
 /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
 /// The color image MUST have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
@@ -93,7 +93,7 @@ impl Aviffy {
         self
     }
 
-    /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](//lib.rs/rav1e))
+    /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
     ///
     /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
     /// The color image MUST have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
