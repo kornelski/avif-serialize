@@ -22,6 +22,8 @@ use std::io;
 pub struct Aviffy {
     premultiplied_alpha: bool,
     colr: ColrBox,
+    min_seq_profile: u8,
+    chroma_subsampling: (bool, bool),
 }
 
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
@@ -48,6 +50,8 @@ impl Aviffy {
     pub fn new() -> Self {
         Self {
             premultiplied_alpha: false,
+            min_seq_profile: 1,
+            chroma_subsampling: (false, false),
             colr: Default::default(),
         }
     }
@@ -134,14 +138,14 @@ impl Aviffy {
         let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height }));
         // This is redundant, but Chrome wants it, and checks that it matches :(
         let av1c_color_prop = ipco.push(IpcoProp::Av1C(Av1CBox {
-            seq_profile: if color_depth_bits >= 12 { 2 } else { 1 },
+            seq_profile: self.min_seq_profile.max(if color_depth_bits >= 12 { 2 } else { 0 }),
             seq_level_idx_0: 31,
             seq_tier_0: false,
             high_bitdepth: color_depth_bits >= 10,
             twelve_bit: color_depth_bits >= 12,
             monochrome: false,
-            chroma_subsampling_x: false,
-            chroma_subsampling_y: false,
+            chroma_subsampling_x: self.chroma_subsampling.0,
+            chroma_subsampling_y: self.chroma_subsampling.1,
             chroma_sample_position: 0,
         }));
         // Useless bloat
@@ -278,6 +282,16 @@ impl Aviffy {
         let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 410);
         self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap(); // Vec can't fail
         out
+    }
+
+    pub fn set_chroma_subsampling(&mut self, subsampled_xy: (bool, bool)) -> &mut Self {
+        self.chroma_subsampling = subsampled_xy;
+        self
+    }
+
+    pub fn set_seq_profile(&mut self, seq_profile: u8) -> &mut Self {
+        self.min_seq_profile = seq_profile;
+        self
     }
 }
 

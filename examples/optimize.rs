@@ -1,3 +1,4 @@
+use avif_serialize::Aviffy;
 use std::fs;
 use std::path::Path;
 
@@ -9,7 +10,10 @@ fn main() {
     let avif = avif_parse::read_avif(&mut avif_file.as_slice()).unwrap();
     let info = avif.primary_item_metadata().unwrap();
 
-    let out = avif_serialize::serialize_to_vec(&avif.primary_item, avif.alpha_item.as_deref(), info.max_frame_width.get(), info.max_frame_height.get(), info.bit_depth);
+    let out = Aviffy::new()
+        // .set_seq_profile(info.seq_profile)
+        // .set_chroma_subsampling(info.chroma_subsampling)
+        .to_vec(&avif.primary_item, avif.alpha_item.as_deref(), info.max_frame_width.get(), info.max_frame_height.get(), info.bit_depth);
 
     let new_path = Path::new(&path).with_extension("rewrite.avif");
     fs::write(&new_path, out).expect("Can't write new file");
