@@ -17,7 +17,7 @@ arrayvec = "0.7.6"
 
 [dev-dependencies]
 mp4parse = { git = "https://github.com/mozilla/mp4parse-rust", rev = "c6ba5afd856c158d9cfc1a447165fcfaaf2b797c" }
-avif-parse = "1.0.0"
+avif-parse = "1.2.0"
 
 [badges]
 maintenance = { status = "passively-maintained" }

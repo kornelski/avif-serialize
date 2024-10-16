@@ -7,11 +7,9 @@ fn main() {
     let avif_file = fs::read(&path).expect("Can't load input image");
 
     let avif = avif_parse::read_avif(&mut avif_file.as_slice()).unwrap();
+    let info = avif.primary_item_metadata().unwrap();
 
-    // Chrome won't like the 0 size (https://crbug.com/1120973)
-    // - put real size in your code.
-    // Firefox doesn't mind it tho.
-    let out = avif_serialize::serialize_to_vec(&avif.primary_item, avif.alpha_item.as_deref(), 0, 0, 8);
+    let out = avif_serialize::serialize_to_vec(&avif.primary_item, avif.alpha_item.as_deref(), info.max_frame_width.get(), info.max_frame_height.get(), info.bit_depth);
 
     let new_path = Path::new(&path).with_extension("rewrite.avif");
     fs::write(&new_path, out).expect("Can't write new file");
