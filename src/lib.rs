@@ -232,21 +232,19 @@ impl Aviffy {
             let auxc_prop = ipco.push(IpcoProp::AuxC(AuxCBox {
                 urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
             }));
-            irefs.push(IrefBox {
-                entry: IrefEntryBox {
+            irefs.push(
+                IrefEntryBox {
                     from_id: alpha_image_id,
                     to_id: color_image_id,
                     typ: FourCC(*b"auxl"),
-                },
-            });
+                });
             if self.premultiplied_alpha {
-                irefs.push(IrefBox {
-                    entry: IrefEntryBox {
+                irefs.push(
+                    IrefEntryBox {
                         from_id: color_image_id,
                         to_id: alpha_image_id,
                         typ: FourCC(*b"prem"),
-                    },
-                });
+                    });
             }
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
@@ -306,7 +304,9 @@ impl Aviffy {
                         entries: ipma_entries,
                     },
                 },
-                iref: irefs,
+                iref: IrefBox {
+                    entries: irefs
+                },
             },
             // Here's the actual data. If HEIF wasn't such a kitchen sink, this
             // would have been the only data this file needs.
