@@ -24,6 +24,7 @@ pub struct Aviffy {
     colr: ColrBox,
     min_seq_profile: u8,
     chroma_subsampling: (bool, bool),
+    monochrome: bool,
 }
 
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
@@ -52,6 +53,7 @@ impl Aviffy {
             premultiplied_alpha: false,
             min_seq_profile: 1,
             chroma_subsampling: (false, false),
+            monochrome: false,
             colr: Default::default(),
         }
     }
@@ -143,7 +145,7 @@ impl Aviffy {
             seq_tier_0: false,
             high_bitdepth: color_depth_bits >= 10,
             twelve_bit: color_depth_bits >= 12,
-            monochrome: false,
+            monochrome: self.monochrome,
             chroma_subsampling_x: self.chroma_subsampling.0,
             chroma_subsampling_y: self.chroma_subsampling.1,
             chroma_sample_position: 0,
@@ -286,6 +288,13 @@ impl Aviffy {
 
     pub fn set_chroma_subsampling(&mut self, subsampled_xy: (bool, bool)) -> &mut Self {
         self.chroma_subsampling = subsampled_xy;
+        self
+    }
+
+    /// Set whether the image is monochrome (grayscale).
+    /// This is used to set the `monochrome` flag in the AV1 sequence header.
+    pub fn set_monochrome(&mut self, monochrome: bool) -> &mut Self {
+        self.monochrome = monochrome;
         self
     }
 
