@@ -315,9 +315,11 @@ impl Aviffy {
 
     /// Panics if the input arguments were invalid. Use [`Self::write`] to handle the errors.
     #[must_use]
+    #[track_caller]
     pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
-        let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 410);
-        self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap();
+        let mut file = self.make_boxes(color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap();
+        let mut out = Vec::new();
+        file.write_to_vec(&mut out).unwrap();
         out
     }
 
@@ -393,6 +395,7 @@ impl Aviffy {
 
 /// See [`serialize`] for description. This one makes a `Vec` instead of using `io::Write`.
 #[must_use]
+#[track_caller]
 pub fn serialize_to_vec(color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
     Aviffy::new().to_vec(color_av1_data, alpha_av1_data, width, height, depth_bits)
 }

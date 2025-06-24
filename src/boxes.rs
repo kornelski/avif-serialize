@@ -50,24 +50,44 @@ impl AvifFile<'_> {
         }
     }
 
-    pub fn write<W: Write>(&mut self, mut out: W) -> io::Result<()> {
+    fn write_header(&mut self, out: &mut Vec<u8>) -> io::Result<()> {
         if self.meta.iprp.ipco.ispe().map_or(true, |b| b.width == 0 || b.height == 0) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "missing width/height"));
         }
 
         self.fix_iloc_positions();
 
-        let mut tmp = Vec::with_capacity(self.ftyp.len() + self.meta.len());
-        let mut w = Writer::new(&mut tmp);
+        out.try_reserve_exact(self.ftyp.len() + self.meta.len())?;
+        let mut w = Writer::new(out);
         self.ftyp.write(&mut w).map_err(|_| io::ErrorKind::OutOfMemory)?;
         self.meta.write(&mut w).map_err(|_| io::ErrorKind::OutOfMemory)?;
+        Ok(())
+    }
+
+    pub fn file_size(&self) -> usize {
+        self.ftyp.len() + self.meta.len() + self.mdat.len()
+    }
+
+    pub fn write_to_vec(&mut self, out: &mut Vec<u8>) -> io::Result<()> {
+        let expected_file_size = self.file_size();
+        out.try_reserve_exact(expected_file_size)?;
+        let initial = out.len();
+        self.write_header(out)?;
+
+        let _ = self.mdat.write(&mut Writer::new(out));
+        let written = out.len() - initial;
+        debug_assert_eq!(expected_file_size, written);
+        Ok(())
+    }
+
+    pub fn write<W: Write>(&mut self, mut out: W) -> io::Result<()> {
+        let mut tmp = Vec::new();
+
+        self.write_header(&mut tmp)?;
         out.write_all(&tmp)?;
         drop(tmp);
 
-        let mut out = IO(out);
-        let mut w = Writer::new(&mut out);
-        self.mdat.write(&mut w)?;
-        Ok(())
+        self.mdat.write(&mut Writer::new(&mut IO(out)))
     }
 }
 
