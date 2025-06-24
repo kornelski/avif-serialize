@@ -277,9 +277,10 @@ impl IpcoBox {
         Self { props: ArrayVec::new() }
     }
 
-    pub fn push(&mut self, prop: IpcoProp) -> u8 {
-        self.props.push(prop);
-        self.props.len() as u8 // the spec wants them off by one
+    #[must_use]
+    pub fn push(&mut self, prop: IpcoProp) -> Option<u8> {
+        self.props.try_push(prop).ok()?;
+        Some(self.props.len() as u8) // the spec wants them off by one
     }
 
     pub(crate) fn ispe(&self) -> Option<&IspeBox> {

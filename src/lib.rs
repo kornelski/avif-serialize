@@ -176,7 +176,7 @@ impl Aviffy {
             typ: FourCC(*b"av01"),
             name: "",
         });
-        let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height }));
+        let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height })).ok_or(io::ErrorKind::InvalidInput)?;
         // This is redundant, but Chrome wants it, and checks that it matches :(
         let av1c_color_prop = ipco.push(IpcoProp::Av1C(Av1CBox {
             seq_profile: self.min_seq_profile.max(if color_depth_bits >= 12 { 2 } else { 0 }),
@@ -188,16 +188,16 @@ impl Aviffy {
             chroma_subsampling_x: self.chroma_subsampling.0,
             chroma_subsampling_y: self.chroma_subsampling.1,
             chroma_sample_position: 0,
-        }));
+        })).ok_or(io::ErrorKind::InvalidInput)?;
         // Useless bloat
         let pixi_3 = ipco.push(IpcoProp::Pixi(PixiBox {
             channels: 3,
             depth: color_depth_bits,
-        }));
+        })).ok_or(io::ErrorKind::InvalidInput)?;
         let mut prop_ids: ArrayVec<u8, 5> = [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].into_iter().collect();
         // Redundant info, already in AV1
         if self.colr != Default::default() {
-            let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr));
+            let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr)).ok_or(io::ErrorKind::InvalidInput)?;
             prop_ids.push(colr_color_prop);
         }
         ipma_entries.push(IpmaEntry {
@@ -221,17 +221,17 @@ impl Aviffy {
                 chroma_subsampling_x: true,
                 chroma_subsampling_y: true,
                 chroma_sample_position: 0,
-            }));
+            })).ok_or(io::ErrorKind::InvalidInput)?;
             // So pointless
             let pixi_1 = ipco.push(IpcoProp::Pixi(PixiBox {
                 channels: 1,
                 depth: alpha_depth_bits,
-            }));
+            })).ok_or(io::ErrorKind::InvalidInput)?;
 
             // that's a silly way to add 1 bit of information, isn't it?
             let auxc_prop = ipco.push(IpcoProp::AuxC(AuxCBox {
                 urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
-            }));
+            })).ok_or(io::ErrorKind::InvalidInput)?;
             irefs.push(
                 IrefEntryBox {
                     from_id: alpha_image_id,
@@ -270,7 +270,6 @@ impl Aviffy {
                 .into(),
             });
             data_chunks.push(alpha_data);
-            data_chunks.push(color_av1_data);
         } else {
             iloc_items.push(IlocItem {
                 id: color_image_id,
@@ -280,8 +279,8 @@ impl Aviffy {
                 }]
                 .into(),
             });
-            data_chunks.push(color_av1_data);
         }
+        data_chunks.push(color_av1_data);
 
         compatible_brands.push(FourCC(*b"mif1"));
         compatible_brands.push(FourCC(*b"miaf"));
