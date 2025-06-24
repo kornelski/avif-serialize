@@ -160,7 +160,6 @@ impl Aviffy {
 
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
-        let mut compatible_brands = ArrayVec::new();
         let mut ipma_entries = ArrayVec::new();
         let mut data_chunks = ArrayVec::new();
         let mut irefs = ArrayVec::new();
@@ -176,7 +175,9 @@ impl Aviffy {
             typ: FourCC(*b"av01"),
             name: "",
         });
+
         let ispe_prop = ipco.push(IpcoProp::Ispe(IspeBox { width, height })).ok_or(io::ErrorKind::InvalidInput)?;
+
         // This is redundant, but Chrome wants it, and checks that it matches :(
         let av1c_color_prop = ipco.push(IpcoProp::Av1C(Av1CBox {
             seq_profile: self.min_seq_profile.max(if color_depth_bits >= 12 { 2 } else { 0 }),
@@ -189,21 +190,24 @@ impl Aviffy {
             chroma_subsampling_y: self.chroma_subsampling.1,
             chroma_sample_position: 0,
         })).ok_or(io::ErrorKind::InvalidInput)?;
+
         // Useless bloat
         let pixi_3 = ipco.push(IpcoProp::Pixi(PixiBox {
             channels: 3,
             depth: color_depth_bits,
         })).ok_or(io::ErrorKind::InvalidInput)?;
-        let mut prop_ids: ArrayVec<u8, 5> = [ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3].into_iter().collect();
+
+        let mut ipma = IpmaEntry {
+            item_id: color_image_id,
+            prop_ids: from_array([ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3])
+        };
+
         // Redundant info, already in AV1
         if self.colr != Default::default() {
             let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr)).ok_or(io::ErrorKind::InvalidInput)?;
-            prop_ids.push(colr_color_prop);
+            ipma.prop_ids.push(colr_color_prop);
         }
-        ipma_entries.push(IpmaEntry {
-            item_id: color_image_id,
-            prop_ids,
-        });
+        ipma_entries.push(ipma);
 
         if let Some(alpha_data) = alpha_av1_data {
             image_items.push(InfeBox {
@@ -211,6 +215,21 @@ impl Aviffy {
                 typ: FourCC(*b"av01"),
                 name: "",
             });
+
+            irefs.push(IrefEntryBox {
+                from_id: alpha_image_id,
+                to_id: color_image_id,
+                typ: FourCC(*b"auxl"),
+            });
+
+            if self.premultiplied_alpha {
+                irefs.push(IrefEntryBox {
+                    from_id: color_image_id,
+                    to_id: alpha_image_id,
+                    typ: FourCC(*b"prem"),
+                });
+            }
+
             let av1c_alpha_prop = ipco.push(boxes::IpcoProp::Av1C(Av1CBox {
                 seq_profile: if alpha_depth_bits >= 12 { 2 } else { 0 },
                 seq_level_idx_0: 31,
@@ -222,6 +241,7 @@ impl Aviffy {
                 chroma_subsampling_y: true,
                 chroma_sample_position: 0,
             })).ok_or(io::ErrorKind::InvalidInput)?;
+
             // So pointless
             let pixi_1 = ipco.push(IpcoProp::Pixi(PixiBox {
                 channels: 1,
@@ -232,23 +252,10 @@ impl Aviffy {
             let auxc_prop = ipco.push(IpcoProp::AuxC(AuxCBox {
                 urn: "urn:mpeg:mpegB:cicp:systems:auxiliary:alpha",
             })).ok_or(io::ErrorKind::InvalidInput)?;
-            irefs.push(
-                IrefEntryBox {
-                    from_id: alpha_image_id,
-                    to_id: color_image_id,
-                    typ: FourCC(*b"auxl"),
-                });
-            if self.premultiplied_alpha {
-                irefs.push(
-                    IrefEntryBox {
-                        from_id: color_image_id,
-                        to_id: alpha_image_id,
-                        typ: FourCC(*b"prem"),
-                    });
-            }
+
             ipma_entries.push(IpmaEntry {
                 item_id: alpha_image_id,
-                prop_ids: [ispe_prop, av1c_alpha_prop | ESSENTIAL_BIT, auxc_prop, pixi_1].into_iter().collect(),
+                prop_ids: from_array([ispe_prop, av1c_alpha_prop | ESSENTIAL_BIT, auxc_prop, pixi_1]),
             });
 
             // Use interleaved color and alpha, with alpha first.
@@ -281,14 +288,11 @@ impl Aviffy {
             });
         }
         data_chunks.push(color_av1_data);
-
-        compatible_brands.push(FourCC(*b"mif1"));
-        compatible_brands.push(FourCC(*b"miaf"));
         Ok(AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
                 minor_version: 0,
-                compatible_brands,
+                compatible_brands: [FourCC(*b"mif1"), FourCC(*b"miaf")].into(),
             },
             meta: MetaBox {
                 hdlr: HdlrBox {},
@@ -391,6 +395,14 @@ impl Aviffy {
     pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
         self.set_premultiplied_alpha(is_premultiplied)
     }
+}
+
+#[inline(always)]
+fn from_array<const L1: usize, const L2: usize, T: Copy>(array: [T; L1]) -> ArrayVec<T, L2> {
+    assert!(L1 <= L2);
+    let mut tmp = ArrayVec::new_const();
+    let _ = tmp.try_extend_from_slice(&array);
+    tmp
 }
 
 /// See [`serialize`] for description. This one makes a `Vec` instead of using `io::Write`.
