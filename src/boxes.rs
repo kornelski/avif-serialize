@@ -59,9 +59,8 @@ impl AvifFile<'_> {
 
         let mut tmp = Vec::with_capacity(self.ftyp.len() + self.meta.len());
         let mut w = Writer::new(&mut tmp);
-        let _ = self.ftyp.write(&mut w);
-        let _ = self.meta.write(&mut w);
-        drop(w);
+        self.ftyp.write(&mut w).map_err(|_| io::ErrorKind::OutOfMemory)?;
+        self.meta.write(&mut w).map_err(|_| io::ErrorKind::OutOfMemory)?;
         out.write_all(&tmp)?;
         drop(tmp);
 
@@ -93,8 +92,7 @@ impl MpegBox for FtypBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"ftyp")?;
+        let mut b = w.basic_box(self.len(), *b"ftyp")?;
         b.push(&self.major_brand.0)?;
         b.u32(self.minor_version)?;
         for cb in &self.compatible_brands {
@@ -128,8 +126,7 @@ impl MpegBox for MetaBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"meta", 0)?;
+        let mut b = w.full_box(self.len(), *b"meta", 0)?;
         self.hdlr.write(&mut b)?;
         self.pitm.write(&mut b)?;
         self.iloc.write(&mut b)?;
@@ -154,8 +151,7 @@ impl MpegBox for IinfBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"iinf", 0)?;
+        let mut b = w.full_box(self.len(), *b"iinf", 0)?;
         b.u16(self.items.len() as _)?;
         for infe in &self.items {
             infe.write(&mut b)?;
@@ -183,8 +179,7 @@ impl MpegBox for InfeBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"infe", 2)?;
+        let mut b = w.full_box(self.len(), *b"infe", 2)?;
         b.u16(self.id)?;
         b.u16(0)?;
         b.push(&self.typ.0)?;
@@ -204,10 +199,9 @@ impl MpegBox for HdlrBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
         // because an image format needs to be told it's an image format,
         // and it does it the way classic MacOS used to, because Quicktime.
-        b.full_box(*b"hdlr", 0)?;
+        let mut b = w.full_box(self.len(), *b"hdlr", 0)?;
         b.u32(0)?; // old MacOS file type handler
         b.push(b"pict")?; // MacOS Quicktime subtype
         b.u32(0)?; // Firefox 92 wants all 0 here
@@ -234,8 +228,7 @@ impl MpegBox for IprpBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"iprp")?;
+        let mut b = w.basic_box(self.len(), *b"iprp")?;
         self.ipco.write(&mut b)?;
         self.ipma.write(&mut b)
     }
@@ -305,8 +298,7 @@ impl MpegBox for IpcoBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"ipco")?;
+        let mut b = w.basic_box(self.len(), *b"ipco")?;
         for p in &self.props {
             p.write(&mut b)?;
         }
@@ -325,8 +317,7 @@ impl AuxCBox {
     }
 
     pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"auxC", 0)?;
+        let mut b = w.full_box(self.len(), *b"auxC", 0)?;
         b.push(self.urn.as_bytes())?;
         b.u8(0)
     }
@@ -346,8 +337,7 @@ impl PixiBox {
     }
 
     pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"pixi", 0)?;
+        let mut b = w.full_box(self.len(), *b"pixi", 0)?;
         b.u8(self.channels)?;
         for _ in 0..self.channels {
             b.u8(self.depth)?;
@@ -370,8 +360,7 @@ impl MpegBox for IspeBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"ispe", 0)?;
+        let mut b = w.full_box(self.len(), *b"ispe", 0)?;
         b.u32(self.width)?;
         b.u32(self.height)
     }
@@ -396,8 +385,7 @@ impl MpegBox for IpmaBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"ipma", 0)?;
+        let mut b = w.full_box(self.len(), *b"ipma", 0)?;
         b.u32(self.entries.len() as _)?; // entry count
 
         for e in &self.entries {
@@ -429,8 +417,7 @@ impl MpegBox for IrefEntryBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(self.typ.0)?;
+        let mut b = w.basic_box(self.len(), self.typ.0)?;
         b.u16(self.from_id)?;
         b.u16(1)?;
         b.u16(self.to_id)
@@ -449,8 +436,7 @@ impl MpegBox for IrefBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"iref", 0)?;
+        let mut b = w.full_box(self.len(), *b"iref", 0)?;
         for entry in &self.entries {
             entry.write(&mut b)?;
         }
@@ -470,8 +456,8 @@ impl MpegBox for AuxlBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"auxl", 0)
+        w.full_box(self.len(), *b"auxl", 0)?;
+        Ok(())
     }
 }
 
@@ -502,8 +488,7 @@ impl MpegBox for ColrBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"colr")?;
+        let mut b = w.basic_box(self.len(), *b"colr")?;
         b.u32(u32::from_be_bytes(*b"nclx"))?;
         b.u16(self.color_primaries as u16)?;
         b.u16(self.transfer_characteristics as u16)?;
@@ -531,8 +516,7 @@ impl MpegBox for Av1CBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"av1C")?;
+        let mut b = w.basic_box(self.len(), *b"av1C")?;
         let flags1 =
             u8::from(self.seq_tier_0) << 7 |
             u8::from(self.high_bitdepth) << 6 |
@@ -561,8 +545,7 @@ impl MpegBox for PitmBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"pitm", 0)?;
+        let mut b = w.full_box(self.len(), *b"pitm", 0)?;
         b.u16(self.0)
     }
 }
@@ -610,8 +593,7 @@ impl MpegBox for IlocBox {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.full_box(*b"iloc", 0)?;
+        let mut b = w.full_box(self.len(), *b"iloc", 0)?;
         b.push(&[4 << 4 | 4, 0])?; // offset and length are 4 bytes
 
         b.u16(self.items.len() as _)?; // num items
@@ -643,8 +625,7 @@ impl MpegBox for MdatBox<'_> {
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.new_box(self.len());
-        b.basic_box(*b"mdat")?;
+        let mut b = w.basic_box(self.len(), *b"mdat")?;
         for ch in &self.data_chunks {
             b.push(ch)?;
         }

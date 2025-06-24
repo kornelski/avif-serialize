@@ -1,20 +1,34 @@
-use std::convert::{Infallible, TryFrom};
+use std::convert::TryFrom;
 use std::io;
+
+pub struct OOM;
 
 pub trait WriterBackend {
     type Error;
-    fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), Self::Error>;
+    fn reserve(&mut self, size: usize) -> Result<(), Self::Error>;
+    fn extend_from_slice_in_capacity(&mut self, data: &[u8]) -> Result<(), Self::Error>;
 }
 
 /// `io::Write` generates bloated code (with backtrace for every byte written),
 /// so small boxes are written infallibly.
 impl WriterBackend for Vec<u8> {
-    type Error = Infallible;
+    type Error = OOM;
+
+    #[inline]
+    fn reserve(&mut self, size: usize) -> Result<(), Self::Error> {
+        self.try_reserve(size).map_err(|_| OOM)
+    }
 
     #[inline(always)]
-    fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), Infallible> {
-        self.extend_from_slice(data);
-        Ok(())
+    fn extend_from_slice_in_capacity(&mut self, data: &[u8]) -> Result<(), Self::Error> {
+        let has_capacity = self.capacity() - self.len() >= data.len();
+        debug_assert!(has_capacity);
+        if has_capacity {
+            self.extend_from_slice(data);
+            Ok(())
+        } else {
+            Err(OOM)
+        }
     }
 }
 
@@ -23,23 +37,33 @@ pub struct IO<W>(pub W);
 impl<W: io::Write> WriterBackend for IO<W> {
     type Error = io::Error;
 
+    #[inline]
+    fn reserve(&mut self, _size: usize) -> io::Result<()> {
+        Ok(())
+    }
+
     #[inline(always)]
-    fn extend_from_slice(&mut self, data: &[u8]) -> io::Result<()> {
+    fn extend_from_slice_in_capacity(&mut self, data: &[u8]) -> io::Result<()> {
         self.0.write_all(data)
     }
 }
 
 pub struct Writer<'p, 'w, B> {
-    parent: Option<&'p mut usize>,
-    left: usize,
     out: &'w mut B,
+    #[cfg(debug_assertions)]
+    parent: Option<&'p mut usize>,
+    #[cfg(not(debug_assertions))]
+    parent: std::marker::PhantomData<&'p mut usize>,
+    #[cfg(debug_assertions)]
+    left: usize,
 }
 
 impl<'w, B> Writer<'static, 'w, B> {
     #[inline]
     pub fn new(out: &'w mut B) -> Self {
         Self {
-            parent: None,
+            parent: Default::default(),
+            #[cfg(debug_assertions)]
             left: 0,
             out,
         }
@@ -47,45 +71,47 @@ impl<'w, B> Writer<'static, 'w, B> {
 }
 
 impl<B: WriterBackend> Writer<'_, '_, B> {
-    #[inline]
-    pub fn new_box(&mut self, len: usize) -> Writer<'_, '_, B> {
-        Writer {
-            parent: if self.left > 0 {
-                Some(&mut self.left)
-            } else {
-                debug_assert!(self.parent.is_none());
-                None
-            },
-            left: len,
-            out: self.out,
-        }
-    }
-
     #[inline(always)]
-    pub fn full_box(&mut self, typ: [u8; 4], version: u8) -> Result<(), B::Error> {
-        self.basic_box(typ)?;
-        self.push(&[version, 0, 0, 0])
+    pub fn full_box(&mut self, len: usize, typ: [u8; 4], version: u8) -> Result<Writer<'_, '_, B>, B::Error> {
+        let mut b = self.basic_box(len, typ)?;
+        b.push(&[version, 0, 0, 0])?;
+        Ok(b)
     }
 
     #[inline]
-    pub fn basic_box(&mut self, typ: [u8; 4]) -> Result<(), B::Error> {
-        let len = self.left;
-        if let Some(parent) = &mut self.parent {
-            **parent -= len;
-        }
-        if let Ok(len) = u32::try_from(len) {
-            self.u32(len)?;
+    pub fn basic_box(&mut self, len: usize, typ: [u8; 4]) -> Result<Writer<'_, '_, B>, B::Error> {
+        let mut b = Writer {
+            out: self.out,
+            parent: Default::default(),
+            #[cfg(debug_assertions)]
+            left: len,
+        };
+        #[cfg(debug_assertions)]
+        if self.left > 0 {
+            self.left -= len;
+            b.parent = Some(&mut self.left);
         } else {
-            self.u32(1)?;
-            self.u64(len as u64)?;
+            debug_assert!(self.parent.is_none());
         }
-        self.push(&typ)
+        b.out.reserve(len)?;
+
+        if let Ok(len) = u32::try_from(len) {
+            b.u32(len)?;
+        } else {
+            debug_assert!(false, "constants for box size don't include this");
+            b.u32(1)?;
+            b.u64(len as u64)?;
+        }
+        b.push(&typ)?;
+        Ok(b)
     }
 
     #[inline(always)]
     pub fn push(&mut self, data: &[u8]) -> Result<(), B::Error> {
-        self.left -= data.len();
-        self.out.extend_from_slice(data)
+        #[cfg(debug_assertions)] {
+            self.left -= data.len();
+        }
+        self.out.extend_from_slice_in_capacity(data)
     }
 
     #[inline(always)]
