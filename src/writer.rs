@@ -31,7 +31,7 @@ impl<W: io::Write> WriterBackend for IO<W> {
 
 pub struct Writer<'p, 'w, B> {
     parent: Option<&'p mut usize>,
-    left: Option<usize>,
+    left: usize,
     out: &'w mut B,
 }
 
@@ -40,7 +40,7 @@ impl<'w, B> Writer<'static, 'w, B> {
     pub fn new(out: &'w mut B) -> Self {
         Self {
             parent: None,
-            left: None,
+            left: 0,
             out,
         }
     }
@@ -50,11 +50,13 @@ impl<B: WriterBackend> Writer<'_, '_, B> {
     #[inline]
     pub fn new_box(&mut self, len: usize) -> Writer<'_, '_, B> {
         Writer {
-            parent: match &mut self.left {
-                Some(l) => Some(l),
-                None => None,
+            parent: if self.left > 0 {
+                Some(&mut self.left)
+            } else {
+                debug_assert!(self.parent.is_none());
+                None
             },
-            left: Some(len),
+            left: len,
             out: self.out,
         }
     }
@@ -67,7 +69,7 @@ impl<B: WriterBackend> Writer<'_, '_, B> {
 
     #[inline]
     pub fn basic_box(&mut self, typ: [u8; 4]) -> Result<(), B::Error> {
-        let len = self.left.unwrap();
+        let len = self.left;
         if let Some(parent) = &mut self.parent {
             **parent -= len;
         }
@@ -82,7 +84,7 @@ impl<B: WriterBackend> Writer<'_, '_, B> {
 
     #[inline(always)]
     pub fn push(&mut self, data: &[u8]) -> Result<(), B::Error> {
-        *self.left.as_mut().unwrap() -= data.len();
+        self.left -= data.len();
         self.out.extend_from_slice(data)
     }
 
@@ -110,8 +112,6 @@ impl<B: WriterBackend> Writer<'_, '_, B> {
 #[cfg(debug_assertions)]
 impl<B> Drop for Writer<'_, '_, B> {
     fn drop(&mut self) {
-        if let Some(unwritten_bytes) = self.left {
-            assert_eq!(0, unwritten_bytes);
-        }
+        assert_eq!(self.left, 0);
     }
 }
