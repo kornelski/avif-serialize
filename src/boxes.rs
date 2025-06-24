@@ -1,13 +1,8 @@
-use crate::constants::ColorPrimaries;
-use crate::constants::MatrixCoefficients;
-use crate::constants::TransferCharacteristics;
-use crate::writer::Writer;
-use crate::writer::WriterBackend;
-use crate::writer::IO;
+use crate::constants::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
+use crate::writer::{Writer, WriterBackend, IO};
 use arrayvec::ArrayVec;
-use std::fmt;
-use std::io;
 use std::io::Write;
+use std::{fmt, io};
 
 pub trait MpegBox {
     fn len(&self) -> usize;
@@ -44,8 +39,8 @@ impl AvifFile<'_> {
     /// and also awkward to serialize, because its content depends on its own serialized byte size.
     fn fix_iloc_positions(&mut self) {
         let start_offset = self.mdat_payload_start_offset();
-        for iloc_item in self.meta.iloc.items.iter_mut() {
-            for ex in iloc_item.extents.iter_mut() {
+        for iloc_item in &mut self.meta.iloc.items {
+            for ex in &mut iloc_item.extents {
                 let abs = match ex.offset {
                     IlocOffset::Relative(n) => n as u32 + start_offset,
                     IlocOffset::Absolute(_) => continue,
@@ -127,7 +122,8 @@ impl MpegBox for MetaBox {
             + self.iprp.len()
             + IrefBox2 {
                 entries: self.iref.iter().map(|e| e.entry).collect(),
-            }.len()
+            }
+            .len()
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -163,7 +159,7 @@ impl MpegBox for IinfBox {
         let mut b = w.new_box(self.len());
         b.full_box(*b"iinf", 0)?;
         b.u16(self.items.len() as _)?;
-        for infe in self.items.iter() {
+        for infe in &self.items {
             infe.write(&mut b)?;
         }
         Ok(())
@@ -185,7 +181,7 @@ impl MpegBox for InfeBox {
         + 2 // id
         + 2 // item_protection_index
         + 4 // type
-        + self.name.as_bytes().len() + 1 // nul-terminated
+        + self.name.len() + 1 // nul-terminated
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -306,7 +302,7 @@ impl MpegBox for IpcoBox {
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.new_box(self.len());
         b.basic_box(*b"ipco")?;
-        for p in self.props.iter() {
+        for p in &self.props {
             p.write(&mut b)?;
         }
         Ok(())
@@ -402,7 +398,7 @@ impl MpegBox for IpmaBox {
         for e in &self.entries {
             b.u16(e.item_id)?;
             b.u8(e.prop_ids.len() as u8)?; // assoc count
-            for &p in e.prop_ids.iter() {
+            for &p in &e.prop_ids {
                 b.u8(p)?;
             }
         }
@@ -470,7 +466,7 @@ impl MpegBox for IrefBox2 {
         let mut b = w.new_box(self.len());
         b.full_box(*b"iref", 0)?;
         for entry in &self.entries {
-            entry.write(&mut b)?
+            entry.write(&mut b)?;
         }
         Ok(())
     }
@@ -632,7 +628,7 @@ impl MpegBox for IlocBox {
         b.push(&[4 << 4 | 4, 0])?; // offset and length are 4 bytes
 
         b.u16(self.items.len() as _)?; // num items
-        for item in self.items.iter() {
+        for item in &self.items {
             b.u16(item.id)?;
             b.u16(0)?;
             b.u16(item.extents.len() as _)?; // num extents

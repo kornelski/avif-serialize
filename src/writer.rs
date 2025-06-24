@@ -1,5 +1,4 @@
-use std::convert::Infallible;
-use std::convert::TryFrom;
+use std::convert::{Infallible, TryFrom};
 use std::io;
 
 pub trait WriterBackend {
@@ -11,6 +10,7 @@ pub trait WriterBackend {
 /// so small boxes are written infallibly.
 impl WriterBackend for Vec<u8> {
     type Error = Infallible;
+
     #[inline(always)]
     fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), Infallible> {
         self.extend_from_slice(data);
@@ -22,6 +22,7 @@ pub struct IO<W>(pub W);
 
 impl<W: io::Write> WriterBackend for IO<W> {
     type Error = io::Error;
+
     #[inline(always)]
     fn extend_from_slice(&mut self, data: &[u8]) -> io::Result<()> {
         self.0.write_all(data)
@@ -45,7 +46,7 @@ impl<'w, B> Writer<'static, 'w, B> {
     }
 }
 
-impl<'p, 'w, B: WriterBackend> Writer<'p, 'w, B> {
+impl<B: WriterBackend> Writer<'_, '_, B> {
     #[inline]
     pub fn new_box(&mut self, len: usize) -> Writer<'_, '_, B> {
         Writer {
@@ -70,12 +71,11 @@ impl<'p, 'w, B: WriterBackend> Writer<'p, 'w, B> {
         if let Some(parent) = &mut self.parent {
             **parent -= len;
         }
-        match u32::try_from(len) {
-            Ok(len) => self.u32(len)?,
-            Err(_) => {
-                self.u32(1)?;
-                self.u64(len as u64)?;
-            }
+        if let Ok(len) = u32::try_from(len) {
+            self.u32(len)?;
+        } else {
+            self.u32(1)?;
+            self.u64(len as u64)?;
         }
         self.push(&typ)
     }

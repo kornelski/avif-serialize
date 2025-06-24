@@ -218,36 +218,33 @@ impl Aviffy {
             // Makes it possible to display partial image.
             iloc_items.push(IlocItem {
                 id: color_image_id,
-                extents: [
-                    IlocExtent {
-                        offset: IlocOffset::Relative(alpha_data.len()),
-                        len: color_av1_data.len(),
-                    },
-                ].into(),
+                extents: [IlocExtent {
+                    offset: IlocOffset::Relative(alpha_data.len()),
+                    len: color_av1_data.len(),
+                }]
+                .into(),
             });
             iloc_items.push(IlocItem {
                 id: alpha_image_id,
-                extents: [
-                    IlocExtent {
-                        offset: IlocOffset::Relative(0),
-                        len: alpha_data.len(),
-                    },
-                ].into(),
+                extents: [IlocExtent {
+                    offset: IlocOffset::Relative(0),
+                    len: alpha_data.len(),
+                }]
+                .into(),
             });
             data_chunks.push(alpha_data);
             data_chunks.push(color_av1_data);
         } else {
             iloc_items.push(IlocItem {
                 id: color_image_id,
-                extents: [
-                    IlocExtent {
-                        offset: IlocOffset::Relative(0),
-                        len: color_av1_data.len(),
-                    },
-                ].into(),
+                extents: [IlocExtent {
+                    offset: IlocOffset::Relative(0),
+                    len: color_av1_data.len(),
+                }]
+                .into(),
             });
             data_chunks.push(color_av1_data);
-        };
+        }
 
         compatible_brands.push(FourCC(*b"mif1"));
         compatible_brands.push(FourCC(*b"miaf"));
@@ -274,13 +271,12 @@ impl Aviffy {
             },
             // Here's the actual data. If HEIF wasn't such a kitchen sink, this
             // would have been the only data this file needs.
-            mdat: MdatBox {
-                data_chunks,
-            },
+            mdat: MdatBox { data_chunks },
         }
     }
 
-    #[must_use] pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
+    #[must_use]
+    pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
         let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 410);
         self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap(); // Vec can't fail
         out
@@ -305,7 +301,8 @@ impl Aviffy {
 }
 
 /// See [`serialize`] for description. This one makes a `Vec` instead of using `io::Write`.
-#[must_use] pub fn serialize_to_vec(color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
+#[must_use]
+pub fn serialize_to_vec(color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
     Aviffy::new().to_vec(color_av1_data, alpha_av1_data, width, height, depth_bits)
 }
 
@@ -333,8 +330,8 @@ fn test_roundtrip_parse_mp4_alpha() {
 
 #[test]
 fn test_roundtrip_parse_avif() {
-    let test_img = [1,2,3,4,5,6];
-    let test_alpha = [77,88,99];
+    let test_img = [1, 2, 3, 4, 5, 6];
+    let test_alpha = [77, 88, 99];
     let avif = serialize_to_vec(&test_img, Some(&test_alpha), 10, 20, 8);
 
     let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
@@ -345,8 +342,8 @@ fn test_roundtrip_parse_avif() {
 
 #[test]
 fn test_roundtrip_parse_avif_colr() {
-    let test_img = [1,2,3,4,5,6];
-    let test_alpha = [77,88,99];
+    let test_img = [1, 2, 3, 4, 5, 6];
+    let test_alpha = [77, 88, 99];
     let avif = Aviffy::new()
         .matrix_coefficients(constants::MatrixCoefficients::Bt709)
         .to_vec(&test_img, Some(&test_alpha), 10, 20, 8);
