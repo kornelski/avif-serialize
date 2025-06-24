@@ -51,6 +51,10 @@ impl AvifFile<'_> {
     }
 
     pub fn write<W: Write>(&mut self, mut out: W) -> io::Result<()> {
+        if self.meta.iprp.ipco.ispe().map_or(true, |b| b.width == 0 || b.height == 0) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "missing width/height"));
+        }
+
         self.fix_iloc_positions();
 
         let mut tmp = Vec::with_capacity(self.ftyp.len() + self.meta.len());
@@ -290,6 +294,13 @@ impl IpcoBox {
         self.props.push(prop);
         self.props.len() as u8 // the spec wants them off by one
     }
+
+    pub(crate) fn ispe(&self) -> Option<&IspeBox> {
+        self.props.iter().find_map(|b| match b {
+            IpcoProp::Ispe(i) => Some(i),
+            _ => None,
+        })
+    }
 }
 
 impl MpegBox for IpcoBox {
@@ -474,6 +485,7 @@ impl MpegBox for IrefBox2 {
 
 /// Auxiliary item (alpha or depth map)
 #[derive(Debug, Copy, Clone)]
+#[allow(unused)]
 pub struct AuxlBox {}
 
 impl MpegBox for AuxlBox {

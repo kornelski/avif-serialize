@@ -25,28 +25,40 @@ pub struct Aviffy {
     min_seq_profile: u8,
     chroma_subsampling: (bool, bool),
     monochrome: bool,
+    width: u32,
+    height: u32,
+    bit_depth: u8,
 }
 
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
 ///
 /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
-/// The color image MUST have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
+/// [You can parse this information out of AV1 payload with `avif-parse`](https://docs.rs/avif-parse/latest/avif_parse/struct.AV1Metadata.html).
+///
+/// The color image should have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
 /// AV1 handles full-res color so effortlessly, you should never need chroma subsampling ever again.
 ///
 /// Optional `alpha_av1_data` is a monochrome image (`rav1e` calls it "YUV400"/`Cs400`) representing transparency.
 /// Alpha adds a lot of header bloat, so don't specify it unless it's necessary.
 ///
 /// `width`/`height` is image size in pixels. It must of course match the size of encoded image data.
-/// `depth_bits` should be 8, 10 or 12, depending on how the image was encoded (typically 8).
+/// `depth_bits` should be 8, 10 or 12, depending on how the image was encoded.
 ///
 /// Color and alpha must have the same dimensions and depth.
 ///
 /// Data is written (streamed) to `into_output`.
 pub fn serialize<W: io::Write>(into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
-    Aviffy::new().write(into_output, color_av1_data, alpha_av1_data, width, height, depth_bits)
+    Aviffy::new()
+        .set_width(width)
+        .set_height(height)
+        .set_bit_depth(depth_bits)
+        .write_slice(into_output, color_av1_data, alpha_av1_data)
 }
 
 impl Aviffy {
+    /// You will have to set image properties to match the AV1 bitstream.
+    ///
+    /// [You can get this information out of the AV1 payload with `avif-parse`](https://docs.rs/avif-parse/latest/avif_parse/struct.AV1Metadata.html).
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -54,6 +66,9 @@ impl Aviffy {
             min_seq_profile: 1,
             chroma_subsampling: (false, false),
             monochrome: false,
+            width: 0,
+            height: 0,
+            bit_depth: 0,
             colr: Default::default(),
         }
     }
@@ -65,6 +80,11 @@ impl Aviffy {
     /// may not be supported correctly by less capable AVIF decoders.
     ///
     /// This just sets the configuration property. The pixel data must have already been processed before compression.
+    /// If a decoder displays semitransparent colors too dark, it doesn't support premultiplied alpha.
+    /// If a decoder displays semitransparent colors too bright, you didn't premultiply the colors before encoding.
+    ///
+    /// If you're not using premultiplied alpha, consider bleeding RGB colors into transparent areas,
+    /// otherwise there may be unwanted outlines around edges of transparency.
     pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
         self.premultiplied_alpha = is_premultiplied;
         self
@@ -102,7 +122,7 @@ impl Aviffy {
     /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
     ///
     /// `color_av1_data` is already-encoded AV1 image data for the color channels (YUV, RGB, etc.).
-    /// The color image MUST have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
+    /// The color image should have been encoded without chroma subsampling AKA YUV444 (`Cs444` in `rav1e`)
     /// AV1 handles full-res color so effortlessly, you should never need chroma subsampling ever again.
     ///
     /// Optional `alpha_av1_data` is a monochrome image (`rav1e` calls it "YUV400"/`Cs400`) representing transparency.
@@ -114,11 +134,22 @@ impl Aviffy {
     /// Color and alpha must have the same dimensions and depth.
     ///
     /// Data is written (streamed) to `into_output`.
+    #[inline]
     pub fn write<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<()> {
-        self.make_boxes(color_av1_data, alpha_av1_data, width, height, depth_bits).write(into_output)
+        self.make_boxes(color_av1_data, alpha_av1_data, width, height, depth_bits)?.write(into_output)
     }
 
-    fn make_boxes<'data>(&self, color_av1_data: &'data [u8], alpha_av1_data: Option<&'data [u8]>, width: u32, height: u32, depth_bits: u8) -> AvifFile<'data> {
+    /// See [`Self::write`]
+    #[inline]
+    pub fn write_slice<W: io::Write>(&self, into_output: W, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>) -> io::Result<()> {
+        self.make_boxes(color_av1_data, alpha_av1_data, self.width, self.height, self.bit_depth)?.write(into_output)
+    }
+
+    fn make_boxes<'data>(&self, color_av1_data: &'data [u8], alpha_av1_data: Option<&'data [u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<AvifFile<'data>> {
+        if ![8, 10, 12].contains(&depth_bits) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "depth must be 8/10/12"));
+        }
+
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
         let mut compatible_brands = ArrayVec::new();
@@ -248,7 +279,7 @@ impl Aviffy {
 
         compatible_brands.push(FourCC(*b"mif1"));
         compatible_brands.push(FourCC(*b"miaf"));
-        AvifFile {
+        Ok(AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
                 minor_version: 0,
@@ -272,16 +303,21 @@ impl Aviffy {
             // Here's the actual data. If HEIF wasn't such a kitchen sink, this
             // would have been the only data this file needs.
             mdat: MdatBox { data_chunks },
-        }
+        })
     }
 
+    /// Panics if the input arguments were invalid. Use [`Self::write`] to handle the errors.
     #[must_use]
     pub fn to_vec(&self, color_av1_data: &[u8], alpha_av1_data: Option<&[u8]>, width: u32, height: u32, depth_bits: u8) -> Vec<u8> {
         let mut out = Vec::with_capacity(color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()) + 410);
-        self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap(); // Vec can't fail
+        self.write(&mut out, color_av1_data, alpha_av1_data, width, height, depth_bits).unwrap();
         out
     }
 
+    /// `(false, false)` is 4:4:4
+    /// `(true, true)` is 4:2:0
+    ///
+    /// `chroma_sample_position` is always 0. Don't use chroma subsampling with AVIF.
     pub fn set_chroma_subsampling(&mut self, subsampled_xy: (bool, bool)) -> &mut Self {
         self.chroma_subsampling = subsampled_xy;
         self
@@ -294,8 +330,27 @@ impl Aviffy {
         self
     }
 
+    /// Sets minimum required
+    ///
+    /// Higher bit depth may increase this
     pub fn set_seq_profile(&mut self, seq_profile: u8) -> &mut Self {
         self.min_seq_profile = seq_profile;
+        self
+    }
+
+    pub fn set_width(&mut self, width: u32) -> &mut Self {
+        self.width = width;
+        self
+    }
+
+    pub fn set_height(&mut self, height: u32) -> &mut Self {
+        self.height = height;
+        self
+    }
+
+    /// 8, 10 or 12.
+    pub fn set_bit_depth(&mut self, bit_depth: u8) -> &mut Self {
+        self.bit_depth = bit_depth;
         self
     }
 }
@@ -365,4 +420,14 @@ fn premultiplied_flag() {
     assert!(ctx.premultiplied_alpha);
     assert_eq!(&test_img[..], ctx.primary_item.as_slice());
     assert_eq!(&test_alpha[..], ctx.alpha_item.as_deref().unwrap());
+}
+
+#[test]
+fn size_required() {
+    assert!(Aviffy::new().set_bit_depth(10).write_slice(&mut vec![], &[], None).is_err());
+}
+
+#[test]
+fn depth_required() {
+    assert!(Aviffy::new().set_width(1).set_height(1).write_slice(&mut vec![], &[], None).is_err());
 }
