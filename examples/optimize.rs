@@ -11,8 +11,9 @@ fn main() {
     let info = avif.primary_item_metadata().unwrap();
 
     let out = Aviffy::new()
-        // .set_seq_profile(info.seq_profile)
-        // .set_chroma_subsampling(info.chroma_subsampling)
+        .set_seq_profile(info.seq_profile)
+        .set_chroma_subsampling(info.chroma_subsampling)
+        .set_monochrome(info.monochrome)
         .to_vec(
             &avif.primary_item,
             avif.alpha_item.as_deref(),
