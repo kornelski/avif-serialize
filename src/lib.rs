@@ -59,6 +59,7 @@ impl Aviffy {
     /// You will have to set image properties to match the AV1 bitstream.
     ///
     /// [You can get this information out of the AV1 payload with `avif-parse`](https://docs.rs/avif-parse/latest/avif_parse/struct.AV1Metadata.html).
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -73,50 +74,57 @@ impl Aviffy {
         }
     }
 
-    /// Set whether image's colorspace uses premultiplied alpha, i.e. RGB channels were multiplied by their alpha value,
-    /// so that transparent areas are all black. Image decoders will be instructed to undo the premultiplication.
-    ///
-    /// Premultiplied alpha images usually compress better and tolerate heavier compression, but
-    /// may not be supported correctly by less capable AVIF decoders.
-    ///
-    /// This just sets the configuration property. The pixel data must have already been processed before compression.
-    /// If a decoder displays semitransparent colors too dark, it doesn't support premultiplied alpha.
-    /// If a decoder displays semitransparent colors too bright, you didn't premultiply the colors before encoding.
-    ///
-    /// If you're not using premultiplied alpha, consider bleeding RGB colors into transparent areas,
-    /// otherwise there may be unwanted outlines around edges of transparency.
-    pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
-        self.premultiplied_alpha = is_premultiplied;
-        self
-    }
-
     /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
     /// Defaults to BT.601, because that's what Safari assumes when `colr` is missing.
     /// Other browsers are smart enough to read this from the AV1 payload instead.
-    pub fn matrix_coefficients(&mut self, matrix_coefficients: constants::MatrixCoefficients) -> &mut Self {
+    #[inline]
+    pub fn set_matrix_coefficients(&mut self, matrix_coefficients: constants::MatrixCoefficients) -> &mut Self {
         self.colr.matrix_coefficients = matrix_coefficients;
         self
     }
 
+    #[doc(hidden)]
+    pub fn matrix_coefficients(&mut self, matrix_coefficients: constants::MatrixCoefficients) -> &mut Self {
+        self.set_matrix_coefficients(matrix_coefficients)
+    }
+
     /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
     /// Defaults to sRGB.
-    pub fn transfer_characteristics(&mut self, transfer_characteristics: constants::TransferCharacteristics) -> &mut Self {
+    #[inline]
+    pub fn set_transfer_characteristics(&mut self, transfer_characteristics: constants::TransferCharacteristics) -> &mut Self {
         self.colr.transfer_characteristics = transfer_characteristics;
         self
     }
 
+    #[doc(hidden)]
+    pub fn transfer_characteristics(&mut self, transfer_characteristics: constants::TransferCharacteristics) -> &mut Self {
+        self.set_transfer_characteristics(transfer_characteristics)
+    }
+
     /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
     /// Defaults to sRGB/Rec.709.
-    pub fn color_primaries(&mut self, color_primaries: constants::ColorPrimaries) -> &mut Self {
+    #[inline]
+    pub fn set_color_primaries(&mut self, color_primaries: constants::ColorPrimaries) -> &mut Self {
         self.colr.color_primaries = color_primaries;
         self
     }
 
+    #[doc(hidden)]
+    pub fn color_primaries(&mut self, color_primaries: constants::ColorPrimaries) -> &mut Self {
+        self.set_color_primaries(color_primaries)
+    }
+
     /// If set, must match the AV1 color payload, and will result in `colr` box added to AVIF.
     /// Defaults to full.
-    pub fn full_color_range(&mut self, full_range: bool) -> &mut Self {
+    #[inline]
+    pub fn set_full_color_range(&mut self, full_range: bool) -> &mut Self {
         self.colr.full_range_flag = full_range;
         self
+    }
+
+    #[doc(hidden)]
+    pub fn full_color_range(&mut self, full_range: bool) -> &mut Self {
+        self.set_full_color_range(full_range)
     }
 
     /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
@@ -318,6 +326,7 @@ impl Aviffy {
     /// `(true, true)` is 4:2:0
     ///
     /// `chroma_sample_position` is always 0. Don't use chroma subsampling with AVIF.
+    #[inline]
     pub fn set_chroma_subsampling(&mut self, subsampled_xy: (bool, bool)) -> &mut Self {
         self.chroma_subsampling = subsampled_xy;
         self
@@ -325,6 +334,7 @@ impl Aviffy {
 
     /// Set whether the image is monochrome (grayscale).
     /// This is used to set the `monochrome` flag in the AV1 sequence header.
+    #[inline]
     pub fn set_monochrome(&mut self, monochrome: bool) -> &mut Self {
         self.monochrome = monochrome;
         self
@@ -333,25 +343,52 @@ impl Aviffy {
     /// Sets minimum required
     ///
     /// Higher bit depth may increase this
+    #[inline]
     pub fn set_seq_profile(&mut self, seq_profile: u8) -> &mut Self {
         self.min_seq_profile = seq_profile;
         self
     }
 
+    #[inline]
     pub fn set_width(&mut self, width: u32) -> &mut Self {
         self.width = width;
         self
     }
 
+    #[inline]
     pub fn set_height(&mut self, height: u32) -> &mut Self {
         self.height = height;
         self
     }
 
     /// 8, 10 or 12.
+    #[inline]
     pub fn set_bit_depth(&mut self, bit_depth: u8) -> &mut Self {
         self.bit_depth = bit_depth;
         self
+    }
+
+    /// Set whether image's colorspace uses premultiplied alpha, i.e. RGB channels were multiplied by their alpha value,
+    /// so that transparent areas are all black. Image decoders will be instructed to undo the premultiplication.
+    ///
+    /// Premultiplied alpha images usually compress better and tolerate heavier compression, but
+    /// may not be supported correctly by less capable AVIF decoders.
+    ///
+    /// This just sets the configuration property. The pixel data must have already been processed before compression.
+    /// If a decoder displays semitransparent colors too dark, it doesn't support premultiplied alpha.
+    /// If a decoder displays semitransparent colors too bright, you didn't premultiply the colors before encoding.
+    ///
+    /// If you're not using premultiplied alpha, consider bleeding RGB colors into transparent areas,
+    /// otherwise there may be unwanted outlines around edges of transparency.
+    #[inline]
+    pub fn set_premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
+        self.premultiplied_alpha = is_premultiplied;
+        self
+    }
+
+    #[doc(hidden)]
+    pub fn premultiplied_alpha(&mut self, is_premultiplied: bool) -> &mut Self {
+        self.set_premultiplied_alpha(is_premultiplied)
     }
 }
 
