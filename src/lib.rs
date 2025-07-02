@@ -28,6 +28,7 @@ pub struct Aviffy {
     width: u32,
     height: u32,
     bit_depth: u8,
+    exif: Option<Vec<u8>>,
 }
 
 /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
@@ -71,6 +72,7 @@ impl Aviffy {
             height: 0,
             bit_depth: 0,
             colr: Default::default(),
+            exif: None
         }
     }
 
@@ -153,7 +155,7 @@ impl Aviffy {
         self.make_boxes(color_av1_data, alpha_av1_data, self.width, self.height, self.bit_depth)?.write(into_output)
     }
 
-    fn make_boxes<'data>(&self, color_av1_data: &'data [u8], alpha_av1_data: Option<&'data [u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<AvifFile<'data>> {
+    fn make_boxes<'data>(&'data self, color_av1_data: &'data [u8], alpha_av1_data: Option<&'data [u8]>, width: u32, height: u32, depth_bits: u8) -> io::Result<AvifFile<'data>> {
         if ![8, 10, 12].contains(&depth_bits) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "depth must be 8/10/12"));
         }
@@ -166,6 +168,7 @@ impl Aviffy {
         let mut ipco = IpcoBox::new();
         let color_image_id = 1;
         let alpha_image_id = 2;
+        let exif_id = 3;
         const ESSENTIAL_BIT: u8 = 0x80;
         let color_depth_bits = depth_bits;
         let alpha_depth_bits = depth_bits; // Sadly, the spec requires these to match.
@@ -287,7 +290,34 @@ impl Aviffy {
                 .into(),
             });
         }
+        
         data_chunks.push(color_av1_data);
+
+        if let Some(exif_data) = &self.exif {
+            image_items.push(InfeBox {
+                id: exif_id,
+                typ: FourCC(*b"Exif"),
+                name: "Exif",
+            });
+            iloc_items.push(IlocItem {
+                id: exif_id,
+                extents: [IlocExtent {
+                    offset: IlocOffset::Relative(
+                        color_av1_data.len() + alpha_av1_data.map_or(0, |a| a.len()),
+                    ),
+                    len: exif_data.len(),
+                }]
+                .into(),
+            });
+            irefs.push(IrefEntryBox {
+                    from_id: color_image_id,
+                    to_id: exif_id,
+                    typ: FourCC(*b"cdsc"),
+                },
+            );
+            data_chunks.push(exif_data);
+        }
+
         Ok(AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
@@ -342,6 +372,13 @@ impl Aviffy {
     #[inline]
     pub fn set_monochrome(&mut self, monochrome: bool) -> &mut Self {
         self.monochrome = monochrome;
+        self
+    }
+
+    /// Set exif metadata to be included in the AVIF file as a separate item.
+    #[inline]
+    pub fn set_exif(&mut self, exif: Vec<u8>) -> &mut Self {
+        self.exif = Some(exif);
         self
     }
 
