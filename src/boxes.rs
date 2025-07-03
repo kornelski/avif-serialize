@@ -159,7 +159,7 @@ impl MpegBox for MetaBox {
 /// Item Info box
 #[derive(Debug, Clone)]
 pub struct IinfBox {
-    pub items: ArrayVec<InfeBox, 2>,
+    pub items: ArrayVec<InfeBox, 3>,
 }
 
 impl MpegBox for IinfBox {
@@ -447,7 +447,7 @@ impl MpegBox for IrefEntryBox {
 
 #[derive(Debug, Clone)]
 pub struct IrefBox {
-    pub entries: ArrayVec<IrefEntryBox, 2>,
+    pub entries: ArrayVec<IrefEntryBox, 3>,
 }
 
 impl MpegBox for IrefBox {
@@ -573,7 +573,7 @@ impl MpegBox for PitmBox {
 
 #[derive(Debug, Clone)]
 pub struct IlocBox {
-    pub items: ArrayVec<IlocItem, 2>,
+    pub items: ArrayVec<IlocItem, 3>,
 }
 
 #[derive(Debug, Clone)]

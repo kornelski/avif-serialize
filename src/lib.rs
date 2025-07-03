@@ -173,6 +173,15 @@ impl Aviffy {
         let color_depth_bits = depth_bits;
         let alpha_depth_bits = depth_bits; // Sadly, the spec requires these to match.
 
+        // Helper for appending data correctly
+        let mut next_data_extent_start = 0;
+        let mut next_extent = |data: &'data [u8]| {
+            let offset = IlocOffset::Relative(next_data_extent_start);
+            let len = data.len();
+            next_data_extent_start += len;
+            [IlocExtent { offset, len }].into()
+        };
+
         image_items.push(InfeBox {
             id: color_image_id,
             typ: FourCC(*b"av01"),
@@ -212,30 +221,25 @@ impl Aviffy {
         }
         ipma_entries.push(ipma);
 
-        if let Some(exif_data) = &self.exif {
+        if let Some(exif_data) = self.exif.as_deref() {
             image_items.push(InfeBox {
                 id: exif_id,
                 typ: FourCC(*b"Exif"),
                 name: "",
             });
+
+            data_chunks.push(exif_data);
             iloc_items.push(IlocItem {
                 id: exif_id,
-                extents: [IlocExtent {
-                    offset: IlocOffset::Relative(0),
-                    len: exif_data.len(),
-                }]
-                .into(),
+                extents: next_extent(exif_data),
             });
 
             irefs.push(IrefEntryBox {
-                    from_id: exif_id,
-                    to_id: color_image_id,
-                    typ: FourCC(*b"cdsc"),
-                },
-            );
-            data_chunks.push(exif_data.as_ref());
+                from_id: exif_id,
+                to_id: color_image_id,
+                typ: FourCC(*b"cdsc"),
+            });
         }
-
 
         if let Some(alpha_data) = alpha_av1_data {
             image_items.push(InfeBox {
@@ -288,34 +292,18 @@ impl Aviffy {
 
             // Use interleaved color and alpha, with alpha first.
             // Makes it possible to display partial image.
-            iloc_items.push(IlocItem {
-                id: color_image_id,
-                extents: [IlocExtent {
-                    offset: IlocOffset::Relative(alpha_data.len()),
-                    len: color_av1_data.len(),
-                }]
-                .into(),
-            });
+            data_chunks.push(alpha_data);
             iloc_items.push(IlocItem {
                 id: alpha_image_id,
-                extents: [IlocExtent {
-                    offset: IlocOffset::Relative(0),
-                    len: alpha_data.len(),
-                }]
-                .into(),
-            });
-            data_chunks.push(alpha_data);
-        } else {
-            iloc_items.push(IlocItem {
-                id: color_image_id,
-                extents: [IlocExtent {
-                    offset: IlocOffset::Relative(0),
-                    len: color_av1_data.len(),
-                }]
-                .into(),
+                extents: next_extent(alpha_data),
             });
         }
         data_chunks.push(color_av1_data);
+        iloc_items.push(IlocItem {
+            id: color_image_id,
+            extents: next_extent(color_av1_data),
+        });
+
         Ok(AvifFile {
             ftyp: FtypBox {
                 major_brand: FourCC(*b"avif"),
@@ -462,6 +450,20 @@ fn test_roundtrip_parse_mp4_alpha() {
     let test_img = b"av12356abc";
     let test_a = b"alpha";
     let avif = serialize_to_vec(test_img, Some(test_a), 10, 20, 8);
+
+    let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
+
+    assert_eq!(&test_img[..], ctx.primary_item_coded_data().unwrap());
+    assert_eq!(&test_a[..], ctx.alpha_item_coded_data().unwrap());
+}
+
+#[test]
+fn test_roundtrip_parse_exif() {
+    let test_img = b"av12356abc";
+    let test_a = b"alpha";
+    let avif = Aviffy::new()
+        .set_exif(b"lol".to_vec())
+        .to_vec(test_img, Some(test_a), 10, 20, 8);
 
     let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
