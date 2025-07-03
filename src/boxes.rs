@@ -2,6 +2,7 @@ use crate::constants::{ColorPrimaries, MatrixCoefficients, TransferCharacteristi
 use crate::writer::{Writer, WriterBackend, IO};
 use arrayvec::ArrayVec;
 use std::io::Write;
+use std::num::NonZeroU32;
 use std::{fmt, io};
 
 pub trait MpegBox {
@@ -24,8 +25,8 @@ impl fmt::Debug for FourCC {
 #[derive(Debug, Clone)]
 pub struct AvifFile<'data> {
     pub ftyp: FtypBox,
-    pub meta: MetaBox,
-    pub mdat: MdatBox<'data>,
+    pub meta: MetaBox<'data>,
+    pub mdat: MdatBox,
 }
 
 impl AvifFile<'_> {
@@ -39,15 +40,7 @@ impl AvifFile<'_> {
     /// and also awkward to serialize, because its content depends on its own serialized byte size.
     fn fix_iloc_positions(&mut self) {
         let start_offset = self.mdat_payload_start_offset();
-        for iloc_item in &mut self.meta.iloc.items {
-            for ex in &mut iloc_item.extents {
-                let abs = match ex.offset {
-                    IlocOffset::Relative(n) => n as u32 + start_offset,
-                    IlocOffset::Absolute(_) => continue,
-                };
-                ex.offset = IlocOffset::Absolute(abs);
-            }
-        }
+        self.meta.iloc.absolute_offset_start = NonZeroU32::new(start_offset);
     }
 
     fn write_header(&mut self, out: &mut Vec<u8>) -> io::Result<()> {
@@ -65,7 +58,7 @@ impl AvifFile<'_> {
     }
 
     pub fn file_size(&self) -> usize {
-        self.ftyp.len() + self.meta.len() + self.mdat.len()
+        self.ftyp.len() + self.meta.len() + self.mdat.len(&self.meta.iloc)
     }
 
     pub fn write_to_vec(&mut self, out: &mut Vec<u8>) -> io::Result<()> {
@@ -74,7 +67,7 @@ impl AvifFile<'_> {
         let initial = out.len();
         self.write_header(out)?;
 
-        let _ = self.mdat.write(&mut Writer::new(out));
+        let _ = self.mdat.write(&mut Writer::new(out), &self.meta.iloc);
         let written = out.len() - initial;
         debug_assert_eq!(expected_file_size, written);
         Ok(())
@@ -87,7 +80,7 @@ impl AvifFile<'_> {
         out.write_all(&tmp)?;
         drop(tmp);
 
-        self.mdat.write(&mut Writer::new(&mut IO(out)))
+        self.mdat.write(&mut Writer::new(&mut IO(out)), &self.meta.iloc)
     }
 }
 
@@ -124,16 +117,16 @@ impl MpegBox for FtypBox {
 
 /// Metadata box
 #[derive(Debug, Clone)]
-pub struct MetaBox {
+pub struct MetaBox<'data> {
     pub hdlr: HdlrBox,
-    pub iloc: IlocBox,
+    pub iloc: IlocBox<'data>,
     pub iinf: IinfBox,
     pub pitm: PitmBox,
     pub iprp: IprpBox,
     pub iref: IrefBox,
 }
 
-impl MpegBox for MetaBox {
+impl MpegBox for MetaBox<'_> {
     #[inline]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
@@ -572,29 +565,25 @@ impl MpegBox for PitmBox {
 }
 
 #[derive(Debug, Clone)]
-pub struct IlocBox {
-    pub items: ArrayVec<IlocItem, 3>,
+pub struct IlocBox<'data> {
+    /// update before writing
+    pub absolute_offset_start: Option<NonZeroU32>,
+    pub items: ArrayVec<IlocItem<'data>, 3>,
 }
 
 #[derive(Debug, Clone)]
-pub struct IlocItem {
+pub struct IlocItem<'data> {
     pub id: u16,
-    pub extents: ArrayVec<IlocExtent, 1>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum IlocOffset {
-    Relative(usize),
-    Absolute(u32),
+    pub extents: [IlocExtent<'data>; 1],
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct IlocExtent {
-    pub offset: IlocOffset,
-    pub len: usize,
+pub struct IlocExtent<'data> {
+    /// offset and len will be calculated when writing
+    pub data: &'data [u8],
 }
 
-impl MpegBox for IlocBox {
+impl<'data> MpegBox for IlocBox<'data> {
     #[inline(always)]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
@@ -618,16 +607,22 @@ impl MpegBox for IlocBox {
         b.push(&[4 << 4 | 4, 0])?; // offset and length are 4 bytes
 
         b.u16(self.items.len() as _)?; // num items
+        let mut next_start = match self.absolute_offset_start {
+            Some(ok) => ok.get(),
+            None => {
+                debug_assert!(false);
+                !0
+            },
+        };
         for item in &self.items {
             b.u16(item.id)?;
             b.u16(0)?;
             b.u16(item.extents.len() as _)?; // num extents
             for ex in &item.extents {
-                b.u32(match ex.offset {
-                    IlocOffset::Absolute(val) => val,
-                    IlocOffset::Relative(_) => panic!("absolute offset must be set"),
-                })?;
-                b.u32(ex.len as _)?;
+                let len = ex.data.len() as u32;
+                b.u32(next_start)?;
+                next_start += len;
+                b.u32(len)?;
             }
         }
         Ok(())
@@ -635,20 +630,18 @@ impl MpegBox for IlocBox {
 }
 
 #[derive(Debug, Clone)]
-pub struct MdatBox<'data> {
-    pub data_chunks: ArrayVec<&'data [u8], 4>,
-}
+pub struct MdatBox;
 
-impl MpegBox for MdatBox<'_> {
+impl MdatBox {
     #[inline(always)]
-    fn len(&self) -> usize {
-        BASIC_BOX_SIZE + self.data_chunks.iter().map(|c| c.len()).sum::<usize>()
+    fn len(&self, chunks: &IlocBox) -> usize {
+        BASIC_BOX_SIZE + chunks.items.iter().flat_map(|c| &c.extents).map(|d| d.data.len()).sum::<usize>()
     }
 
-    fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
-        let mut b = w.basic_box(self.len(), *b"mdat")?;
-        for ch in &self.data_chunks {
-            b.push(ch)?;
+    fn write<B: WriterBackend>(&self, w: &mut Writer<B>, chunks: &IlocBox) -> Result<(), B::Error> {
+        let mut b = w.basic_box(self.len(chunks), *b"mdat")?;
+        for ch in chunks.items.iter().flat_map(|c| &c.extents) {
+            b.push(ch.data)?;
         }
         Ok(())
     }

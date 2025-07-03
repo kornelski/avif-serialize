@@ -72,7 +72,7 @@ impl Aviffy {
             height: 0,
             bit_depth: 0,
             colr: Default::default(),
-            exif: None
+            exif: None,
         }
     }
 
@@ -163,7 +163,6 @@ impl Aviffy {
         let mut image_items = ArrayVec::new();
         let mut iloc_items = ArrayVec::new();
         let mut ipma_entries = ArrayVec::new();
-        let mut data_chunks = ArrayVec::new();
         let mut irefs = ArrayVec::new();
         let mut ipco = IpcoBox::new();
         let color_image_id = 1;
@@ -172,15 +171,6 @@ impl Aviffy {
         const ESSENTIAL_BIT: u8 = 0x80;
         let color_depth_bits = depth_bits;
         let alpha_depth_bits = depth_bits; // Sadly, the spec requires these to match.
-
-        // Helper for appending data correctly
-        let mut next_data_extent_start = 0;
-        let mut next_extent = |data: &'data [u8]| {
-            let offset = IlocOffset::Relative(next_data_extent_start);
-            let len = data.len();
-            next_data_extent_start += len;
-            [IlocExtent { offset, len }].into()
-        };
 
         image_items.push(InfeBox {
             id: color_image_id,
@@ -211,7 +201,7 @@ impl Aviffy {
 
         let mut ipma = IpmaEntry {
             item_id: color_image_id,
-            prop_ids: from_array([ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3])
+            prop_ids: from_array([ispe_prop, av1c_color_prop | ESSENTIAL_BIT, pixi_3]),
         };
 
         // Redundant info, already in AV1
@@ -228,10 +218,9 @@ impl Aviffy {
                 name: "",
             });
 
-            data_chunks.push(exif_data);
             iloc_items.push(IlocItem {
                 id: exif_id,
-                extents: next_extent(exif_data),
+                extents: [IlocExtent { data: exif_data }],
             });
 
             irefs.push(IrefEntryBox {
@@ -292,16 +281,14 @@ impl Aviffy {
 
             // Use interleaved color and alpha, with alpha first.
             // Makes it possible to display partial image.
-            data_chunks.push(alpha_data);
             iloc_items.push(IlocItem {
                 id: alpha_image_id,
-                extents: next_extent(alpha_data),
+                extents: [IlocExtent { data: alpha_data }],
             });
         }
-        data_chunks.push(color_av1_data);
         iloc_items.push(IlocItem {
             id: color_image_id,
-            extents: next_extent(color_av1_data),
+            extents: [IlocExtent { data: color_av1_data }],
         });
 
         Ok(AvifFile {
@@ -314,22 +301,21 @@ impl Aviffy {
                 hdlr: HdlrBox {},
                 iinf: IinfBox { items: image_items },
                 pitm: PitmBox(color_image_id),
-                iloc: IlocBox { items: iloc_items },
+                iloc: IlocBox {
+                    absolute_offset_start: None,
+                    items: iloc_items,
+                },
                 iprp: IprpBox {
                     ipco,
                     // It's not enough to define these properties,
                     // they must be assigned to the image
-                    ipma: IpmaBox {
-                        entries: ipma_entries,
-                    },
+                    ipma: IpmaBox { entries: ipma_entries },
                 },
-                iref: IrefBox {
-                    entries: irefs
-                },
+                iref: IrefBox { entries: irefs },
             },
             // Here's the actual data. If HEIF wasn't such a kitchen sink, this
             // would have been the only data this file needs.
-            mdat: MdatBox { data_chunks },
+            mdat: MdatBox,
         })
     }
 

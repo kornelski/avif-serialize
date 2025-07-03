@@ -1,6 +1,6 @@
 [package]
 name = "avif-serialize"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Kornel Lesiński <kornel@geekhood.net>"]
 edition = "2021"
 license = "BSD-3-Clause"
@@ -11,7 +11,7 @@ keywords = ["avif", "heif", "bmff", "av1", "mux"]
 repository = "https://github.com/kornelski/avif-serialize"
 homepage = "https://lib.rs/avif-serialize"
 include = ["src/*.rs", "Cargo.toml", "README.md", "LICENSE"]
-rust-version = "1.66"
+rust-version = "1.80"
 
 [dependencies]
 arrayvec = "0.7.6"
