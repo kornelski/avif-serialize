@@ -446,10 +446,19 @@ pub struct IrefBox {
 impl MpegBox for IrefBox {
     #[inline(always)]
     fn len(&self) -> usize {
+        if self.entries.is_empty() {
+            return 0;
+        }
+
         FULL_BOX_SIZE + self.entries.iter().map(|e| e.len()).sum::<usize>()
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+        // The iref box is not mandatory, skip it if empty.
+        if self.entries.is_empty() {
+            return Ok(());
+        }
+
         let mut b = w.full_box(self.len(), *b"iref", 0)?;
         for entry in &self.entries {
             entry.write(&mut b)?;
