@@ -135,7 +135,7 @@ impl MpegBox for MetaBox<'_> {
             + self.iloc.len()
             + self.iinf.len()
             + self.iprp.len()
-            + self.iref.len()
+            + if !self.iref.is_empty() { self.iref.len() } else { 0 }
     }
 
     fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
@@ -144,7 +144,9 @@ impl MpegBox for MetaBox<'_> {
         self.pitm.write(&mut b)?;
         self.iloc.write(&mut b)?;
         self.iinf.write(&mut b)?;
-        self.iref.write(&mut b)?;
+        if !self.iref.is_empty() {
+            self.iref.write(&mut b)?;
+        }
         self.iprp.write(&mut b)
     }
 }
@@ -441,6 +443,12 @@ impl MpegBox for IrefEntryBox {
 #[derive(Debug, Clone)]
 pub struct IrefBox {
     pub entries: ArrayVec<IrefEntryBox, 3>,
+}
+
+impl IrefBox {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
 }
 
 impl MpegBox for IrefBox {
