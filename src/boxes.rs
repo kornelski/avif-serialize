@@ -347,12 +347,12 @@ pub struct PixiBox {
 }
 
 impl PixiBox {
-    pub fn len(&self) -> usize {
+    pub fn len(self) -> usize {
         FULL_BOX_SIZE
             + 1 + self.channels as usize
     }
 
-    pub fn write<B: WriterBackend>(&self, w: &mut Writer<B>) -> Result<(), B::Error> {
+    pub fn write<B: WriterBackend>(self, w: &mut Writer<B>) -> Result<(), B::Error> {
         let mut b = w.full_box(self.len(), *b"pixi", 0)?;
         b.u8(self.channels)?;
         for _ in 0..self.channels {
@@ -591,8 +591,9 @@ pub struct IlocExtent<'data> {
     pub data: &'data [u8],
 }
 
-impl<'data> MpegBox for IlocBox<'data> {
+impl MpegBox for IlocBox<'_> {
     #[inline(always)]
+    #[allow(unused_parens)]
     fn len(&self) -> usize {
         FULL_BOX_SIZE
         + 1 // offset_size, length_size
@@ -615,12 +616,9 @@ impl<'data> MpegBox for IlocBox<'data> {
         b.push(&[4 << 4 | 4, 0])?; // offset and length are 4 bytes
 
         b.u16(self.items.len() as _)?; // num items
-        let mut next_start = match self.absolute_offset_start {
-            Some(ok) => ok.get(),
-            None => {
-                debug_assert!(false);
-                !0
-            },
+        let mut next_start = if let Some(ok) = self.absolute_offset_start { ok.get() } else {
+            debug_assert!(false);
+            !0
         };
         for item in &self.items {
             b.u16(item.id)?;

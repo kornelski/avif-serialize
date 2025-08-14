@@ -71,7 +71,7 @@ impl Aviffy {
             width: 0,
             height: 0,
             bit_depth: 0,
-            colr: Default::default(),
+            colr: ColrBox::default(),
             exif: None,
         }
     }
@@ -205,7 +205,7 @@ impl Aviffy {
         };
 
         // Redundant info, already in AV1
-        if self.colr != Default::default() {
+        if self.colr != ColrBox::default() {
             let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr)).ok_or(io::ErrorKind::InvalidInput)?;
             ipma.prop_ids.push(colr_color_prop);
         }
