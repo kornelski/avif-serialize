@@ -1,6 +1,6 @@
 [package]
 name = "avif-serialize"
-version = "0.8.6"
+version = "0.8.7"
 authors = ["Kornel Lesiński <kornel@geekhood.net>"]
 edition = "2021"
 license = "BSD-3-Clause"
@@ -19,6 +19,7 @@ arrayvec = "0.7.6"
 [dev-dependencies]
 mp4parse = "0.17"
 avif-parse = "1.4.0"
+zenavif-parse = { path = "/home/lilith/work/zenavif-parse" }
 
 [badges]
 maintenance = { status = "passively-maintained" }

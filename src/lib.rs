@@ -22,6 +22,8 @@ use std::io;
 pub struct Aviffy {
     premultiplied_alpha: bool,
     colr: ColrBox,
+    clli: Option<ClliBox>,
+    mdcv: Option<MdcvBox>,
     min_seq_profile: u8,
     chroma_subsampling: (bool, bool),
     monochrome: bool,
@@ -72,6 +74,8 @@ impl Aviffy {
             height: 0,
             bit_depth: 0,
             colr: ColrBox::default(),
+            clli: None,
+            mdcv: None,
             exif: None,
         }
     }
@@ -127,6 +131,42 @@ impl Aviffy {
     #[doc(hidden)]
     pub fn full_color_range(&mut self, full_range: bool) -> &mut Self {
         self.set_full_color_range(full_range)
+    }
+
+    /// Set Content Light Level Information for HDR (CEA-861.3).
+    ///
+    /// `max_content_light_level` (MaxCLL) is the maximum light level of any single pixel in cd/m².
+    /// `max_pic_average_light_level` (MaxFALL) is the maximum frame-average light level in cd/m².
+    ///
+    /// Adds a `clli` property box to the AVIF container.
+    #[inline]
+    pub fn set_content_light_level(&mut self, max_content_light_level: u16, max_pic_average_light_level: u16) -> &mut Self {
+        self.clli = Some(ClliBox {
+            max_content_light_level,
+            max_pic_average_light_level,
+        });
+        self
+    }
+
+    /// Set Mastering Display Colour Volume for HDR (SMPTE ST 2086).
+    ///
+    /// `primaries` are the display primaries in CIE 1931 xy × 50000.
+    /// Order: \[green, blue, red\] per SMPTE ST 2086.
+    /// `white_point` uses the same encoding (e.g. D65 = (15635, 16450)).
+    ///
+    /// `max_luminance` and `min_luminance` are in cd/m² × 10000
+    /// (e.g. 1000 cd/m² = 10_000_000, 0.005 cd/m² = 50).
+    ///
+    /// Adds an `mdcv` property box to the AVIF container.
+    #[inline]
+    pub fn set_mastering_display(&mut self, primaries: [(u16, u16); 3], white_point: (u16, u16), max_luminance: u32, min_luminance: u32) -> &mut Self {
+        self.mdcv = Some(MdcvBox {
+            primaries,
+            white_point,
+            max_luminance,
+            min_luminance,
+        });
+        self
     }
 
     /// Makes an AVIF file given encoded AV1 data (create the data with [`rav1e`](https://lib.rs/rav1e))
@@ -209,6 +249,17 @@ impl Aviffy {
             let colr_color_prop = ipco.push(IpcoProp::Colr(self.colr)).ok_or(io::ErrorKind::InvalidInput)?;
             ipma.prop_ids.push(colr_color_prop);
         }
+
+        if let Some(clli) = self.clli {
+            let clli_prop = ipco.push(IpcoProp::Clli(clli)).ok_or(io::ErrorKind::InvalidInput)?;
+            ipma.prop_ids.push(clli_prop);
+        }
+
+        if let Some(mdcv) = self.mdcv {
+            let mdcv_prop = ipco.push(IpcoProp::Mdcv(mdcv)).ok_or(io::ErrorKind::InvalidInput)?;
+            ipma.prop_ids.push(mdcv_prop);
+        }
+
         ipma_entries.push(ipma);
 
         if let Some(exif_data) = self.exif.as_deref() {
@@ -504,4 +555,108 @@ fn size_required() {
 #[test]
 fn depth_required() {
     assert!(Aviffy::new().set_width(1).set_height(1).write_slice(&mut vec![], &[], None).is_err());
+}
+
+#[test]
+fn clli_roundtrip() {
+    let test_img = [1, 2, 3, 4, 5, 6];
+    let avif = Aviffy::new()
+        .set_content_light_level(1000, 400)
+        .to_vec(&test_img, None, 10, 20, 8);
+
+    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
+    let cll = parser.content_light_level().expect("clli box should be present");
+    assert_eq!(cll.max_content_light_level, 1000);
+    assert_eq!(cll.max_pic_average_light_level, 400);
+}
+
+#[test]
+fn mdcv_roundtrip() {
+    let test_img = [1, 2, 3, 4, 5, 6];
+    // BT.2020 primaries (standard encoding: CIE xy × 50000)
+    let primaries = [
+        (8500, 39850),   // green
+        (6550, 2300),    // blue
+        (35400, 14600),  // red
+    ];
+    let white_point = (15635, 16450); // D65
+    let max_luminance = 10_000_000; // 1000 cd/m²
+    let min_luminance = 1;          // 0.0001 cd/m²
+
+    let avif = Aviffy::new()
+        .set_mastering_display(primaries, white_point, max_luminance, min_luminance)
+        .to_vec(&test_img, None, 10, 20, 8);
+
+    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
+    let mdcv = parser.mastering_display().expect("mdcv box should be present");
+    assert_eq!(mdcv.primaries, primaries);
+    assert_eq!(mdcv.white_point, white_point);
+    assert_eq!(mdcv.max_luminance, max_luminance);
+    assert_eq!(mdcv.min_luminance, min_luminance);
+}
+
+#[test]
+fn hdr10_full_metadata() {
+    let test_img = [1, 2, 3, 4, 5, 6];
+    let test_alpha = [77, 88, 99];
+    let primaries = [
+        (8500, 39850),
+        (6550, 2300),
+        (35400, 14600),
+    ];
+    let white_point = (15635, 16450);
+
+    let avif = Aviffy::new()
+        .set_transfer_characteristics(constants::TransferCharacteristics::Smpte2084)
+        .set_color_primaries(constants::ColorPrimaries::Bt2020)
+        .set_matrix_coefficients(constants::MatrixCoefficients::Bt2020Ncl)
+        .set_content_light_level(4000, 1000)
+        .set_mastering_display(primaries, white_point, 40_000_000, 50)
+        .to_vec(&test_img, Some(&test_alpha), 10, 20, 10);
+
+    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
+
+    // Verify CICP
+    let color_info = parser.color_info().expect("colr box should be present");
+    match color_info {
+        zenavif_parse::ColorInformation::Nclx {
+            color_primaries,
+            transfer_characteristics,
+            matrix_coefficients,
+            full_range,
+        } => {
+            assert_eq!(*color_primaries, 9);  // BT.2020
+            assert_eq!(*transfer_characteristics, 16); // PQ
+            assert_eq!(*matrix_coefficients, 9); // BT.2020 NCL
+            assert!(*full_range);
+        }
+        _ => panic!("expected Nclx color info"),
+    }
+
+    // Verify CLLI
+    let cll = parser.content_light_level().expect("clli box should be present");
+    assert_eq!(cll.max_content_light_level, 4000);
+    assert_eq!(cll.max_pic_average_light_level, 1000);
+
+    // Verify MDCV
+    let mdcv = parser.mastering_display().expect("mdcv box should be present");
+    assert_eq!(mdcv.primaries, primaries);
+    assert_eq!(mdcv.white_point, white_point);
+    assert_eq!(mdcv.max_luminance, 40_000_000);
+    assert_eq!(mdcv.min_luminance, 50);
+
+    // Verify data integrity
+    let ctx = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+    assert_eq!(ctx.primary_item.as_slice(), &test_img[..]);
+    assert_eq!(ctx.alpha_item.as_deref().unwrap(), &test_alpha[..]);
+}
+
+#[test]
+fn no_hdr_metadata_by_default() {
+    let test_img = [1, 2, 3, 4, 5, 6];
+    let avif = serialize_to_vec(&test_img, None, 10, 20, 8);
+
+    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
+    assert!(parser.content_light_level().is_none());
+    assert!(parser.mastering_display().is_none());
 }
