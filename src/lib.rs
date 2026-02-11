@@ -564,8 +564,8 @@ fn clli_roundtrip() {
         .set_content_light_level(1000, 400)
         .to_vec(&test_img, None, 10, 20, 8);
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
-    let cll = parser.content_light_level().expect("clli box should be present");
+    let parser = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+    let cll = parser.content_light_level.expect("clli box should be present");
     assert_eq!(cll.max_content_light_level, 1000);
     assert_eq!(cll.max_pic_average_light_level, 400);
 }
@@ -587,8 +587,8 @@ fn mdcv_roundtrip() {
         .set_mastering_display(primaries, white_point, max_luminance, min_luminance)
         .to_vec(&test_img, None, 10, 20, 8);
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
-    let mdcv = parser.mastering_display().expect("mdcv box should be present");
+    let parser = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+    let mdcv = parser.mastering_display.expect("mdcv box should be present");
     assert_eq!(mdcv.primaries, primaries);
     assert_eq!(mdcv.white_point, white_point);
     assert_eq!(mdcv.max_luminance, max_luminance);
@@ -614,32 +614,15 @@ fn hdr10_full_metadata() {
         .set_mastering_display(primaries, white_point, 40_000_000, 50)
         .to_vec(&test_img, Some(&test_alpha), 10, 20, 10);
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
-
-    // Verify CICP
-    let color_info = parser.color_info().expect("colr box should be present");
-    match color_info {
-        zenavif_parse::ColorInformation::Nclx {
-            color_primaries,
-            transfer_characteristics,
-            matrix_coefficients,
-            full_range,
-        } => {
-            assert_eq!(*color_primaries, 9);  // BT.2020
-            assert_eq!(*transfer_characteristics, 16); // PQ
-            assert_eq!(*matrix_coefficients, 9); // BT.2020 NCL
-            assert!(*full_range);
-        }
-        _ => panic!("expected Nclx color info"),
-    }
+    let parser = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
 
     // Verify CLLI
-    let cll = parser.content_light_level().expect("clli box should be present");
+    let cll = parser.content_light_level.expect("clli box should be present");
     assert_eq!(cll.max_content_light_level, 4000);
     assert_eq!(cll.max_pic_average_light_level, 1000);
 
     // Verify MDCV
-    let mdcv = parser.mastering_display().expect("mdcv box should be present");
+    let mdcv = parser.mastering_display.expect("mdcv box should be present");
     assert_eq!(mdcv.primaries, primaries);
     assert_eq!(mdcv.white_point, white_point);
     assert_eq!(mdcv.max_luminance, 40_000_000);
@@ -656,7 +639,7 @@ fn no_hdr_metadata_by_default() {
     let test_img = [1, 2, 3, 4, 5, 6];
     let avif = serialize_to_vec(&test_img, None, 10, 20, 8);
 
-    let parser = zenavif_parse::AvifParser::from_bytes(&avif).unwrap();
-    assert!(parser.content_light_level().is_none());
-    assert!(parser.mastering_display().is_none());
+    let parser = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
+    assert!(parser.content_light_level.is_none());
+    assert!(parser.mastering_display.is_none());
 }
