@@ -44,7 +44,7 @@ impl AvifFile<'_> {
     }
 
     fn write_header(&mut self, out: &mut Vec<u8>) -> io::Result<()> {
-        if self.meta.iprp.ipco.ispe().map_or(true, |b| b.width == 0 || b.height == 0) {
+        if self.meta.iprp.ipco.ispe().is_none_or(|b| b.width == 0 || b.height == 0) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "missing width/height"));
         }
 
