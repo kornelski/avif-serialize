@@ -653,7 +653,7 @@ pub struct IlocBox<'data> {
 #[derive(Debug, Clone)]
 pub struct IlocItem<'data> {
     pub id: u16,
-    pub extents: [IlocExtent<'data>; 1],
+    pub extents: ArrayVec<IlocExtent<'data>, 2>,
 }
 
 #[derive(Debug, Copy, Clone)]

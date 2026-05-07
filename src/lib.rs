@@ -16,6 +16,8 @@ use crate::boxes::*;
 use arrayvec::ArrayVec;
 use std::io;
 
+const EXIF_TIFF_OFFSET_ZERO: [u8; 4] = 0_u32.to_be_bytes();
+
 /// Config for the serialization (allows setting advanced image properties).
 ///
 /// See [`Aviffy::new`].
@@ -271,7 +273,7 @@ impl Aviffy {
 
             iloc_items.push(IlocItem {
                 id: exif_id,
-                extents: [IlocExtent { data: exif_data }],
+                extents: exif_extents(exif_data),
             });
 
             irefs.push(IrefEntryBox {
@@ -334,12 +336,12 @@ impl Aviffy {
             // Makes it possible to display partial image.
             iloc_items.push(IlocItem {
                 id: alpha_image_id,
-                extents: [IlocExtent { data: alpha_data }],
+                extents: from_array([IlocExtent { data: alpha_data }]),
             });
         }
         iloc_items.push(IlocItem {
             id: color_image_id,
-            extents: [IlocExtent { data: color_av1_data }],
+            extents: from_array([IlocExtent { data: color_av1_data }]),
         });
 
         Ok(AvifFile {
@@ -398,7 +400,10 @@ impl Aviffy {
         self
     }
 
-    /// Set exif metadata to be included in the AVIF file as a separate item.
+    /// Set Exif metadata to be included in the AVIF file as a separate item.
+    ///
+    /// A TIFF Exif block will be written in the AVIF/HEIF Exif item form.
+    /// Already-framed AVIF/HEIF Exif item data is preserved.
     #[inline]
     pub fn set_exif(&mut self, exif: Vec<u8>) -> &mut Self {
         self.exif = Some(exif);
@@ -457,6 +462,35 @@ impl Aviffy {
     }
 }
 
+fn exif_extents(exif: &[u8]) -> ArrayVec<IlocExtent<'_>, 2> {
+    if looks_like_heif_exif_item(exif) {
+        return from_array([IlocExtent { data: exif }]);
+    }
+
+    from_array([
+        IlocExtent {
+            data: &EXIF_TIFF_OFFSET_ZERO,
+        },
+        IlocExtent { data: exif },
+    ])
+}
+
+fn looks_like_heif_exif_item(exif: &[u8]) -> bool {
+    let Some(offset_bytes) = exif.get(..4) else {
+        return false;
+    };
+    let tiff_offset = u32::from_be_bytes(offset_bytes.try_into().unwrap()) as usize;
+    let Some(tiff_start) = 4_usize.checked_add(tiff_offset) else {
+        return false;
+    };
+
+    exif.get(tiff_start..).map_or(false, looks_like_tiff_header)
+}
+
+fn looks_like_tiff_header(data: &[u8]) -> bool {
+    data.starts_with(b"II\x2a\0") || data.starts_with(b"MM\0\x2a")
+}
+
 #[inline(always)]
 fn from_array<const L1: usize, const L2: usize, T: Copy>(array: [T; L1]) -> ArrayVec<T, L2> {
     assert!(L1 <= L2);
@@ -499,13 +533,62 @@ fn test_roundtrip_parse_exif() {
     let test_img = b"av12356abc";
     let test_a = b"alpha";
     let avif = Aviffy::new()
-        .set_exif(b"lol".to_vec())
+        .set_exif(test_tiff_exif())
         .to_vec(test_img, Some(test_a), 10, 20, 8);
 
     let ctx = mp4parse::read_avif(&mut avif.as_slice(), mp4parse::ParseStrictness::Normal).unwrap();
 
     assert_eq!(&test_img[..], ctx.primary_item_coded_data().unwrap());
     assert_eq!(&test_a[..], ctx.alpha_item_coded_data().unwrap());
+}
+
+#[test]
+fn set_exif_stores_input_bytes_unchanged() {
+    let tiff_exif = test_tiff_exif();
+    let mut aviffy = Aviffy::new();
+
+    aviffy.set_exif(tiff_exif.clone());
+
+    assert_eq!(Some(tiff_exif), aviffy.exif);
+}
+
+#[test]
+fn raw_tiff_exif_uses_header_extent() {
+    let tiff_exif = test_tiff_exif();
+    let extents = exif_extents(&tiff_exif);
+
+    assert_eq!(2, extents.len());
+    assert_eq!(&EXIF_TIFF_OFFSET_ZERO[..], extents[0].data);
+    assert_eq!(tiff_exif.as_slice(), extents[1].data);
+}
+
+#[test]
+fn heif_exif_item_uses_single_extent() {
+    let expected = test_heif_exif(&test_tiff_exif());
+    let extents = exif_extents(&expected);
+
+    assert_eq!(1, extents.len());
+    assert_eq!(expected.as_slice(), extents[0].data);
+}
+
+#[test]
+fn heif_exif_item_with_nonzero_offset_uses_single_extent() {
+    let mut expected = 2_u32.to_be_bytes().to_vec();
+    expected.extend_from_slice(&[0, 0]);
+    expected.extend_from_slice(&test_tiff_exif());
+    let extents = exif_extents(&expected);
+
+    assert_eq!(1, extents.len());
+    assert_eq!(expected.as_slice(), extents[0].data);
+}
+
+#[test]
+fn writes_heif_exif_header_before_raw_tiff_exif() {
+    let tiff_exif = test_tiff_exif();
+    let expected = test_heif_exif(&tiff_exif);
+    let avif = Aviffy::new().set_exif(tiff_exif).to_vec(b"av12356abc", None, 10, 20, 8);
+
+    assert!(avif.windows(expected.len()).any(|window| window == expected));
 }
 
 #[test]
@@ -642,4 +725,34 @@ fn no_hdr_metadata_by_default() {
     let parser = avif_parse::read_avif(&mut avif.as_slice()).unwrap();
     assert!(parser.content_light_level.is_none());
     assert!(parser.mastering_display.is_none());
+}
+
+#[cfg(test)]
+fn test_heif_exif(tiff_exif: &[u8]) -> Vec<u8> {
+    let mut heif_exif = 0_u32.to_be_bytes().to_vec();
+    heif_exif.extend_from_slice(tiff_exif);
+    heif_exif
+}
+
+#[cfg(test)]
+fn test_tiff_exif() -> Vec<u8> {
+    let make = b"avif-serialize\0";
+    let ifd0_offset = 8_u32;
+    let ifd0_entry_count = 1_u16;
+    let make_value_offset = 8 + 2 + 12 + 4;
+
+    let mut exif = Vec::new();
+    exif.extend_from_slice(b"II");
+    exif.extend_from_slice(&42_u16.to_le_bytes());
+    exif.extend_from_slice(&ifd0_offset.to_le_bytes());
+
+    exif.extend_from_slice(&ifd0_entry_count.to_le_bytes());
+    exif.extend_from_slice(&0x010f_u16.to_le_bytes());
+    exif.extend_from_slice(&2_u16.to_le_bytes());
+    exif.extend_from_slice(&(make.len() as u32).to_le_bytes());
+    exif.extend_from_slice(&(make_value_offset as u32).to_le_bytes());
+    exif.extend_from_slice(&0_u32.to_le_bytes());
+    exif.extend_from_slice(make);
+
+    exif
 }
